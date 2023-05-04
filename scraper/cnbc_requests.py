@@ -82,6 +82,11 @@ def extract_article_title(root, output):
     output["title"] = header_tag.text_content().strip()
 
 
+def extract_published_time(root, output):
+    time_tag = root.xpath("//time[@data-testid='published-timestamp']")[0]
+    output["published"] = time_tag.attrib["datetime"]
+
+
 def extract_summary(root, output):
     key_point_list = root.xpath("//div[@class='RenderKeyPoints-list']//ul")
     if len(key_point_list) > 0:
@@ -117,7 +122,7 @@ def extract_body(root, output):
     output["body"] = result
 
 
-extractors = [extract_article_section, extract_article_title, extract_summary, extract_body]
+extractors = [extract_article_section, extract_published_time, extract_article_title, extract_summary, extract_body]
 
 
 if __name__ == "__main__":
