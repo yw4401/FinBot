@@ -41,7 +41,7 @@ def extract_page(resp, source_url):
     return result_set, root
 
 
-def get_urls(start_url, allowed_fqdn=".*"):
+def get_urls(start_url, allowed_fqdn=".*", timeout=5, retry=3):
     visited = set()
     url_matcher = re.compile(allowed_fqdn)
     queue = [start_url]
@@ -53,7 +53,20 @@ def get_urls(start_url, allowed_fqdn=".*"):
             continue
         print("Visiting: " + next_url)
         visited.add(next_url)
-        resp = requests.get(url=next_url, headers=HEADERS)
+        retry_count = 0
+        while retry_count < retry:
+            try:
+                resp = requests.get(url=next_url, headers=HEADERS, timeout=timeout)
+                break
+            except Exception as e:
+                print("Failed to fetch: " + next_url)
+                print("Exception: " + str(e))
+                if retry_count != retry:
+                    print("Retrying")
+                retry_count = retry_count + 1
+        if retry_count == retry:
+            print("Skipping: " + next_url)
+            continue
         try:
             page_links, root = extract_page(resp, next_url)
         except ValueError:
