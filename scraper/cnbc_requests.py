@@ -41,7 +41,7 @@ def extract_page(resp, source_url):
     return result_set, root
 
 
-def get_urls(start_url, allowed_fqdn=".*", emit=lambda root: True):
+def get_urls(start_url, allowed_fqdn=".*"):
     visited = set()
     url_matcher = re.compile(allowed_fqdn)
     queue = [start_url]
@@ -60,9 +60,7 @@ def get_urls(start_url, allowed_fqdn=".*", emit=lambda root: True):
             print("Failed to get: " + next_url)
             continue
         queue.extend(page_links)
-        if emit(root):
-            print("Emitting: " + next_url)
-            yield next_url, str(root)
+        yield next_url, str(root)
 #        time.sleep(1)
 
 
@@ -122,16 +120,30 @@ def extract_body(root, output):
     output["body"] = result
 
 
-extractors = [extract_article_section, extract_published_time, extract_article_title, extract_summary, extract_body]
+extractors = [{"required": True, "method": extract_article_section},
+              {"required": True, "method": extract_published_time},
+              {"required": True, "method": extract_article_title},
+              {"required": False, "method": extract_summary},
+              {"required": True, "method": extract_body}]
 
 
 if __name__ == "__main__":
     counter = 0
-    for url, source in get_urls(BASE_URL, allowed_fqdn=r".*www\.cnbc\.com.*", emit=find_headline_emitter):
+    for url, source in get_urls(BASE_URL, allowed_fqdn=r".*www\.cnbc\.com.*"):
         root = fromstring(source)
         with open("../cnbc_scrape/%s.json" % counter, "w") as fp:
             output_dict = {"url": url, "source": source}
+            write = True
             for ext in extractors:
-                ext(root, output_dict)
-            json.dump(output_dict, fp)
+                required = ext["required"]
+                try:
+                    func = ext["method"]
+                    func(root, output_dict)
+                except Exception as e:
+                    print("Failed to Extract: " + str(e))
+                    if required:
+                        write = False
+                    break
+            if write:
+                json.dump(output_dict, fp)
         counter = counter + 1
