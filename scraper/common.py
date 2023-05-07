@@ -320,7 +320,7 @@ class GCPBucketDirectoryWriter(AbstractContextManager):
     def load(self):
         max_id = -1
         bucket = self.client.bucket(self.bucket)
-        files = set(self.client.list_blobs(bucket_or_name=self.bucket))
+        files = set([f.name for f in self.client.list_blobs(bucket_or_name=self.bucket)])
         if "index.json" not in files:
             for b in self.client.list_blobs(bucket_or_name=self.bucket):
                 file_id = int(b.name.split(".")[0])
