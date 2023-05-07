@@ -64,12 +64,12 @@ def extract_body(root, output):
     output["body"] = result
 
 
-def run_scraper_minutes(tracker, writer, minutes=30):
+def run_scraper_minutes(tracker, writer, minutes=20):
 
     def job():
         start_scraper("cnbc", progressor=tracker, writer=writer, delay=1, duration=minutes * 60)
 
-    return job()
+    return job
 
 
 if __name__ == "__main__":
@@ -77,7 +77,10 @@ if __name__ == "__main__":
                                    filters=[create_robot_filter(BASE_URL),
                                             create_regex_filter(r"https?://www\.cnbc\.com")])
     writer = JSONFileDirectoryWriter("../cnbc-scrape")
-    schedule.every(1).to(2).hour.do(run_scraper_minutes(tracker, writer))
+
+    # starts the scraper for 20 minutes and then stop it every 45 to 120 minutes randomly can confuse the web server
+    # load detectors
+    schedule.every(45).to(120).minutes.do(run_scraper_minutes(tracker, writer))
 
     while True:
         schedule.run_pending()
