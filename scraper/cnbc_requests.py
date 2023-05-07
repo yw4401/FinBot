@@ -78,10 +78,10 @@ if __name__ == "__main__":
                                             create_regex_filter(r"https?://www\.cnbc\.com")])
     writer = JSONFileDirectoryWriter("../cnbc-scrape")
 
-    # starts the scraper for 20 minutes and then stop it every 45 to 120 minutes randomly can confuse the web server
-    # load detectors
+    # starts the scraper for 20 minutes and then stop it, for every 45 to 120 minutes randomly, can confuse the
+    # web server load detectors
     schedule.every(45).to(120).minutes.do(run_scraper_minutes(tracker, writer))
-
+    schedule.run_all()
     while True:
         schedule.run_pending()
         time.sleep(1)

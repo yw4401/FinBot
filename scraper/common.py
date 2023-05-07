@@ -287,6 +287,12 @@ def parse_robot_txt(base_url):
 
 
 def create_robot_filter(base_url):
+    """
+    Filters out urls that are forbidden by the website owners for bot to scrape
+    :param base_url: the base url of the site
+    :return: a function that will return True if and only if the url given is allowed by site owner
+    """
+
     robot = parse_robot_txt(base_url)
 
     def pruner(url):
