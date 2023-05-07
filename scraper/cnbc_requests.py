@@ -3,6 +3,7 @@ from lxml.html import tostring
 from unstructured.staging.base import convert_to_dict
 from nltk.tokenize import word_tokenize
 from common import *
+import schedule
 
 BASE_URL = "https://www.cnbc.com"
 LINKS_XPATH = "//a"
@@ -63,10 +64,21 @@ def extract_body(root, output):
     output["body"] = result
 
 
+def run_scraper_minutes(tracker, writer, minutes=30):
+
+    def job():
+        start_scraper("cnbc", progressor=tracker, writer=writer, delay=1, duration=minutes * 60)
+
+    return job()
+
+
 if __name__ == "__main__":
-    start_scraper("cnbc",
-                  progressor=InMemProgressTracker(starting_set=[BASE_URL],
-                                                  filters=[create_robot_filter(BASE_URL),
-                                                           create_regex_filter(r"https?://www\.cnbc\.com")]),
-                  writer=JSONFileDirectoryWriter("../cnbc-scrape"),
-                  delay=1)
+    tracker = InMemProgressTracker(starting_set=[BASE_URL],
+                                   filters=[create_robot_filter(BASE_URL),
+                                            create_regex_filter(r"https?://www\.cnbc\.com")])
+    writer = JSONFileDirectoryWriter("../cnbc-scrape")
+    schedule.every(1).to(2).hour.do(run_scraper_minutes(tracker, writer))
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

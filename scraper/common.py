@@ -43,7 +43,7 @@ def extractor_func(scraper, required=False):
     return extractor_decorator
 
 
-def start_scraper(scraper, progressor, writer, getter=None, delay=1):
+def start_scraper(scraper, progressor, writer, getter=None, delay=1, duration=float("inf")):
     """
     Start to scrape the webpages from the progressor using the extractors from the scraper, and write the extracted
     output dictionary via the writer. In the process, the getter is used to download the page and get all the link
@@ -56,11 +56,13 @@ def start_scraper(scraper, progressor, writer, getter=None, delay=1):
     with the first element being an iterable of links from the page identified by the url, and the second element should be
     a string containing the source of the page in html
     :param delay: the number of seconds to pause between each visit to the site
+    :param duration: the approximate amount of seconds to run the scraper
     """
 
     if getter is None:
         getter = RequestGetter()
     with writer:
+        start_time = time.time()
         for url, source in get_urls(progressor=progressor, getter=getter, delay=delay):
             root = fromstring(source)
             extractors = []
@@ -80,6 +82,8 @@ def start_scraper(scraper, progressor, writer, getter=None, delay=1):
                     break
             if write:
                 writer.save(output_dict)
+            if time.time() - start_time >= duration:
+                break
 
 
 def get_urls(progressor, getter=None, delay=1):
