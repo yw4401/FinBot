@@ -64,24 +64,27 @@ def extract_body(root, output):
     output["body"] = result
 
 
-def run_scraper_minutes(tracker, writer, getter, minutes=5):
-
+def run_scraper_minutes(hours=20):
     def job():
-        start_scraper("cnbc", progressor=tracker, writer=writer, delay=1, duration=minutes * 60)
+        writer = GCPBucketDirectoryWriter(bucket="cnbc-articles",
+                                          #                                         credential_path="/home/sdai/.config/gcloud/application_default_credentials"
+                                          #                                                          ".json"
+                                          )
+        with writer:
+            tracker = InMemProgressTracker(starting_set=[BASE_URL],
+                                           visited=writer.saved_pages,
+                                           filters=[create_robot_filter(BASE_URL),
+                                                    create_regex_filter(r"https?://www\.cnbc\.com")])
+        getter = RequestGetter(retry=3)
+        start_scraper("cnbc", getter=getter, progressor=tracker, writer=writer, delay=1, duration=3600 * hours)
+        writer.write_index()
 
     return job
 
 
 if __name__ == "__main__":
-    tracker = InMemProgressTracker(starting_set=[BASE_URL],
-                                   filters=[create_robot_filter(BASE_URL),
-                                            create_regex_filter(r"https?://www\.cnbc\.com")])
-    writer = JSONFileDirectoryWriter("../cnbc-scrape")
-    getter = RequestGetter(retry=3)
-
-    # starts the scraper for 5 minutes and then stop it, for every 10 to 20 minutes randomly, can confuse the
-    # web server load detectors
-    schedule.every(10).to(20).minutes.do(run_scraper_minutes(tracker, writer, getter))
+    schedule.every(1).day.do(run_scraper_minutes())
+    schedule.run_all()
     while True:
         schedule.run_pending()
         time.sleep(1)

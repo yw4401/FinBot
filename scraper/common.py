@@ -14,6 +14,7 @@ from typing import Type
 from urllib.parse import urlsplit
 import urllib.robotparser
 from random import randint
+from google.cloud import storage
 
 
 ua = UserAgent()
@@ -229,20 +230,118 @@ class JSONFileDirectoryWriter(AbstractContextManager):
     def __init__(self, directory):
         AbstractContextManager.__init__(self)
         self.directory = directory
-        self.counter = 0
+        self.counter = -1
+        self._saved_pages = set()
 
     def save(self, output):
+        self.check_directory()
+        if self.counter == -1:
+            self.load()
+        with open(Path(self.directory, str(self.counter) + ".json"), "w") as fp:
+            json.dump(output, fp)
+            self.counter = self.counter + 1
+            self._saved_pages.add(output["url"])
+
+    @property
+    def saved_pages(self):
+        if self.counter == -1:
+            self.load()
+        return set(self._saved_pages)
+
+    def load(self):
+        self.check_directory()
+        max_file = 0
+        for f in os.listdir(self.directory):
+            with open(Path(self.directory, f), "r") as fp:
+                obj = json.load(fp)
+                self._saved_pages.add(obj["url"])
+            file_id = int(f.split(".")[0])
+            if file_id > max_file:
+                max_file = file_id
+        self.counter = max_file + 1
+
+    def check_directory(self):
         if not os.path.exists(self.directory):
             Path(self.directory).mkdir(parents=True)
         if not os.path.isdir(self.directory):
             raise ValueError("Invalid Directory: " + self.directory)
-        with open(Path(self.directory, str(self.counter) + ".json"), "w") as fp:
-            json.dump(output, fp)
-            self.counter = self.counter + 1
 
     def __exit__(self, __exc_type: Type[BaseException] | None, __exc_value: BaseException | None,
                  __traceback: TracebackType | None) -> bool | None:
         pass
+
+
+class GCPBucketDirectoryWriter(AbstractContextManager):
+
+    def __init__(self, bucket, credential_path=None, project="msca310019-capstone-f945"):
+        AbstractContextManager.__init__(self)
+        self.bucket = bucket
+        self._saved_pages = set()
+        self.project = project
+        self.counter = -1
+        if credential_path:
+            os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credential_path
+        self.client = None
+
+    def __enter__(self):
+        self.client = storage.Client(project=self.project)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+
+    @property
+    def saved_pages(self):
+        if self.counter == -1:
+            self.load()
+        return set(self._saved_pages)
+
+    def save(self, output):
+        self.check_bucket()
+        if self.counter == -1:
+            self.load()
+        bucket = self.client.bucket(self.bucket)
+        with bucket.blob("%s.json" % self.counter).open("w") as fp:
+            json.dump(output, fp)
+            self.counter = self.counter + 1
+            self._saved_pages.add(output["url"])
+
+    def write_index(self):
+        self.check_bucket()
+        bucket = self.client.bucket(self.bucket)
+        with bucket.blob("index.json").open("w") as fp:
+            index_dict = {
+                "counter": self.counter,
+                "articles": list(self._saved_pages)
+            }
+            json.dump(index_dict, fp)
+
+    def load(self):
+        max_id = -1
+        bucket = self.client.bucket(self.bucket)
+        files = set(self.client.list_blobs(bucket_or_name=self.bucket))
+        if "index.json" not in files:
+            for b in self.client.list_blobs(bucket_or_name=self.bucket):
+                file_id = int(b.name.split(".")[0])
+                with bucket.blob(b.name).open("r") as fp:
+                    obj = json.load(fp)
+                    self._saved_pages.add(obj["url"])
+                if file_id >= max_id:
+                    max_id = file_id
+            self.counter = max_id + 1
+            self.write_index()
+        else:
+            with bucket.blob("index.json").open("r") as fp:
+                idx = json.load(fp)
+                self.counter = idx["counter"]
+                self._saved_pages = set(idx["articles"])
+
+    def check_bucket(self):
+        buckets = self.client.list_buckets()
+        bucket_set = set([b.name for b in buckets])
+        if self.bucket not in bucket_set:
+            raise ValueError("Invalid bucket")
 
 
 class InMemProgressTracker:
