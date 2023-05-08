@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 import urllib.robotparser
 from random import randint
 from google.cloud import storage
+import logging
 
 
 ua = UserAgent()
@@ -77,7 +78,7 @@ def start_scraper(scraper, progressor, writer, getter=None, delay=1, duration=fl
                     func = ext["method"]
                     func(root, output_dict)
                 except Exception as e:
-                    print("Failed to Extract: " + str(e))
+                    logging.info("Failed to Extract %s: %s" %(url, str(e)))
                     if required:
                         write = False
                     break
@@ -104,13 +105,13 @@ def get_urls(progressor, getter=None, delay=1):
     if getter is None:
         getter = RequestGetter()
     for next_url in progressor:
-        print("Visiting: " + next_url)
+        logging.info("Visiting: " + next_url)
         try:
             page_links, source = getter.extract(next_url)
             progressor.update(page_links)
             yield next_url, source
         except Exception as e:
-            print("Failed to extract page: " + str(e))
+            logging.warning("Failed to get links: " + str(e))
         time.sleep(delay)
 
 
@@ -214,10 +215,9 @@ class RequestGetter:
                 resp = old_resp
                 break
             except Exception as e:
-                print("Failed to fetch: " + next_url)
-                print("Exception: " + str(e))
+                logging.warning("Failed to fetch %s: %s" % (next_url, str(e)))
                 if retry_count != self.retry:
-                    print("Retrying")
+                    logging.info("Retrying: " + next_url)
                 retry_count = retry_count + 1
         if resp is None:
             raise ValueError("Failed to fetch: " + next_url)
@@ -302,9 +302,11 @@ class GCPBucketDirectoryWriter(AbstractContextManager):
         if self.counter == -1:
             self.load()
         bucket = self.client.bucket(self.bucket)
-        with bucket.blob("%s.json" % self.counter).open("w") as fp:
+        name = "%s.json" % self.counter
+        with bucket.blob(name).open("w") as fp:
             json.dump(output, fp)
             self.counter = self.counter + 1
+            logging.info("Saved scraped article to %s, New counter: %s" % (name, self.counter))
             self._saved_pages.add(output["url"])
 
     def write_index(self):
@@ -316,12 +318,15 @@ class GCPBucketDirectoryWriter(AbstractContextManager):
                 "articles": list(self._saved_pages)
             }
             json.dump(index_dict, fp)
+            logging.info("Saving counter: %s" % self.counter)
 
     def load(self):
+        logging.info("Trying to load index")
         max_id = -1
         bucket = self.client.bucket(self.bucket)
         files = set([f.name for f in self.client.list_blobs(bucket_or_name=self.bucket)])
         if "index.json" not in files:
+            logging.warning("Index doesn't exists, creating one")
             for b in self.client.list_blobs(bucket_or_name=self.bucket):
                 file_id = int(b.name.split(".")[0])
                 with bucket.blob(b.name).open("r") as fp:
@@ -336,6 +341,7 @@ class GCPBucketDirectoryWriter(AbstractContextManager):
                 idx = json.load(fp)
                 self.counter = idx["counter"]
                 self._saved_pages = set(idx["articles"])
+        logging.info("Loaded counter: %s" % self.counter)
 
     def check_bucket(self):
         buckets = self.client.list_buckets()

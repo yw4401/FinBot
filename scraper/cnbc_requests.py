@@ -1,9 +1,14 @@
+import logging
+import time
+
 from unstructured.partition.html import partition_html
 from lxml.html import tostring
 from unstructured.staging.base import convert_to_dict
 from nltk.tokenize import word_tokenize
 from common import *
-import schedule
+import google.cloud.logging
+import google.auth
+
 
 BASE_URL = "https://www.cnbc.com"
 LINKS_XPATH = "//a"
@@ -64,27 +69,38 @@ def extract_body(root, output):
     output["body"] = result
 
 
-def run_scraper_minutes(hours=20):
-    def job():
-        writer = GCPBucketDirectoryWriter(bucket="cnbc-articles",
-                                          #                                         credential_path="/home/sdai/.config/gcloud/application_default_credentials"
-                                          #                                                          ".json"
-                                          )
-        with writer:
-            tracker = InMemProgressTracker(starting_set=[BASE_URL],
-                                           visited=writer.saved_pages,
-                                           filters=[create_robot_filter(BASE_URL),
-                                                    create_regex_filter(r"https?://www\.cnbc\.com")])
-        getter = RequestGetter(retry=3)
-        start_scraper("cnbc", getter=getter, progressor=tracker, writer=writer, delay=1, duration=3600 * hours)
-        writer.write_index()
+def create_new_state(credential_path=None):
+    writer = GCPBucketDirectoryWriter(bucket="cnbc-articles",
+                                      credential_path=credential_path
+                                      )
+    with writer:
+        tracker = InMemProgressTracker(starting_set=[BASE_URL],
+                                       visited=writer.saved_pages,
+                                       filters=[create_robot_filter(BASE_URL),
+                                                create_regex_filter(r"https?://www\.cnbc\.com")])
+    getter = RequestGetter(retry=3)
+    return writer, tracker, getter
 
-    return job
+
+RESET_TIME = 3600 * 24
 
 
 if __name__ == "__main__":
-    schedule.every(1).day.do(run_scraper_minutes())
-    schedule.run_all()
+    credentials = "/home/sdai/.config/gcloud/application_default_credentials.json"
+    auto_credentials, project_id = google.auth.default()
+
+    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945", credentials=auto_credentials)
+    log_client.setup_logging()
+    logging.getLogger().setLevel(logging.INFO)
+
+    writer, tracker, getter = create_new_state(credentials)
+    last_reset = time.time()
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        current_time = time.time()
+        if current_time - last_reset > RESET_TIME:
+            writer, tracker, getter = create_new_state(credentials)
+            logging.info("Restarting scrape to get new articles")
+            last_reset = time.time()
+        start_scraper("cnbc", getter=getter, writer=writer, progressor=tracker, duration=5 * 60)
+        with writer:
+            writer.write_index()
