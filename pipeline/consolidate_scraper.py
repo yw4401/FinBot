@@ -5,6 +5,7 @@ from contextlib import closing
 from collections import namedtuple
 from datetime import datetime
 from google.cloud import storage
+import google.cloud.logging
 from enum import Enum
 
 
@@ -176,6 +177,9 @@ TARGET_BUCKET = "markdown-converged"
 
 
 if __name__ == "__main__":
+    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945")
+    log_client.setup_logging()
+    logging.getLogger().setLevel(logging.INFO)
     with closing(storage.Client(project="msca310019-capstone-f945")) as client:
         conversion_idx = load_conversion_index(client)
         counter = conversion_idx["standardized"]
