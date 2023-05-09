@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from contextlib import closing
 from collections import namedtuple
 from datetime import datetime
@@ -55,6 +56,26 @@ def write_conversion_index(client, index, bucket="meta-info", conversion_index="
         json.dump(fp=fp, obj=index)
 
 
+def normalize_text(text):
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def extract_summary(summary_list):
+    summary = ""
+    summary_type = SummaryType.NULL
+
+    if len(summary_list) == 1:
+        summary = normalize_text(summary_list[0])
+        if len(summary) > 0:
+            summary_type = SummaryType.PLAIN
+    else:
+        for s in summary_list:
+            summary = summary + "* " + normalize_text(s) + "\n"
+        summary = summary.strip()
+        summary_type = SummaryType.BULLETS
+    return summary, summary_type
+
+
 def convert_cnbc(cnbc_dict):
     title = cnbc_dict["title"]
     category = cnbc_dict["subsection"]
@@ -63,23 +84,16 @@ def convert_cnbc(cnbc_dict):
     body = ""
     for d in cnbc_dict["body"]:
         if d["type"] == "Title":
-            body = body + "## " + d["text"] + "\n"
+            body = body + "## " + normalize_text(d["text"]) + "\n"
         if d["type"] == "NarrativeText":
-            body = body + d["text"] + "\n"
+            body = body + normalize_text(d["text"]) + "\n"
     body = body.strip()
 
     summary = ""
     summary_type = SummaryType.NULL
     if "summary" in cnbc_dict:
         sum_list = cnbc_dict["summary"]
-        if len(sum_list) == 1:
-            summary = sum_list[0]
-            summary_type = SummaryType.PLAIN
-        else:
-            for s in sum_list:
-                summary = summary + "* " + s + "\n"
-            summary = summary.strip()
-            summary_type = SummaryType.BULLETS
+        summary, summary_type = extract_summary(sum_list)
     return Article(
         category=category,
         title=title,
@@ -91,7 +105,29 @@ def convert_cnbc(cnbc_dict):
 
 
 def convert_reuters(reuter_dict):
-    pass
+    title = reuter_dict["title"]
+    category = reuter_dict["subsection"]
+    published = datetime.strptime(reuter_dict["published"].strip(), "%B %d, %Y %I:%M %p")
+
+    body = ""
+    for b in reuter_dict["body"].split("\n\n"):
+        body = body + normalize_text(b) + "\n"
+    body = body.strip()
+
+    summary = ""
+    summary_type = SummaryType.NULL
+    if "summary" in reuter_dict:
+        sum_list = reuter_dict["summary"].split("\n\n")
+        summary, summary_type = extract_summary(sum_list)
+
+    return Article(
+        category=category,
+        title=title,
+        published=published,
+        body=body,
+        summary=summary,
+        summary_type=summary_type
+    )
 
 
 CONVERTER_REGISTRY = {
@@ -143,7 +179,11 @@ if __name__ == "__main__":
 
         for target in CONVERTER_REGISTRY:
             logging.info("Starting to process %s from idx: %s" % (target, conversion_idx[target]))
-            counter, next_start = convert_raw_data(client, target, TARGET_BUCKET, counter, conversion_idx[target])
+            try:
+                counter, next_start = convert_raw_data(client, target, TARGET_BUCKET, counter, conversion_idx[target])
+            except Exception as e:
+                logging.error("Failed to process: %s. Reason: %s" % (target, e))
+                continue
             conversion_idx[target] = next_start
             conversion_idx["standardized"] = counter
             write_conversion_index(client, conversion_idx)

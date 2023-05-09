@@ -9,7 +9,6 @@ from common import *
 import google.cloud.logging
 import google.auth
 
-
 BASE_URL = "https://www.reuters.com/"
 LINKS_XPATH = "//a"
 
@@ -18,6 +17,7 @@ LINKS_XPATH = "//a"
 def extract_article_section(root, output):
     sub_sect = root.xpath("//h1[@data-testid='Heading']")[0]
     output["subsection"] = sub_sect.text_content().strip()
+
 
 @extractor_func(scraper="reuters", required=True)
 def extract_article_title(root, output):
@@ -37,7 +37,7 @@ def extract_published_time(root, output):
                 time_text = span_tag.text_content().strip().replace('UTC', '')
             else:
                 date_text = span_tag.text_content().strip()
- 
+
     # Concatenate date and time information and print
     datetime_str = date_text + ' ' + time_text
 
@@ -48,8 +48,8 @@ def extract_published_time(root, output):
 def extract_summary(root, output):
     # Find all `div` elements that have a class containing "paragraph--"
     summary_tags = root.xpath('//ul[contains(@class, "summary__summary")]/li[contains(@data-testid, "Body")]')
-    
-    summary=''
+
+    summary = ''
     # Extract the text content of each `div` element and print it
     for summary_tag in summary_tags:
         text = summary_tag.text_content().strip()
@@ -63,8 +63,8 @@ def extract_summary(root, output):
 def extract_body(root, output):
     # Find all `div` elements that have a class containing "paragraph--"
     paragraph_tags = root.xpath('//div/p[contains(@data-testid, "paragraph-")]')
-    
-    body=''
+
+    body = ''
     # Extract the text content of each `div` element and print it
     for paragraph_tag in paragraph_tags:
         text = paragraph_tag.text_content().strip()
@@ -72,7 +72,6 @@ def extract_body(root, output):
             body = body + '\n\n' + text
 
     output["body"] = body
-  
 
 
 def create_new_state(credential_path=None):
@@ -90,10 +89,9 @@ def create_new_state(credential_path=None):
 
 RESET_TIME = 3600 * 24
 
-
 if __name__ == "__main__":
-    #credentials = "/home/sdai/.config/gcloud/application_default_credentials.json"
-    #auto_credentials, project_id = google.auth.default()
+    # credentials = "/home/sdai/.config/gcloud/application_default_credentials.json"
+    # auto_credentials, project_id = google.auth.default()
 
     log_client = google.cloud.logging.Client(project="msca310019-capstone-f945")
     log_client.setup_logging()
