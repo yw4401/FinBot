@@ -28,7 +28,7 @@ def load_conversion_index(client, bucket="meta-info", conversion_index="scraper-
             "standardized": 0
         }
     bucket = client.bucket(bucket)
-    with bucket.open(conversion_index, "r") as fp:
+    with bucket.blob(conversion_index).open("r") as fp:
         index = json.load(fp)
         if "cnbc" not in index:
             index["cnbc"] = 0
@@ -43,7 +43,7 @@ def get_upper_id(client, bucket):
     bucket = client.bucket(bucket)
     upper_id = -1
     while upper_id == -1:
-        with bucket.open(BUCKET_IDX_FILE, "r") as fp:
+        with bucket.blob(BUCKET_IDX_FILE).open("r") as fp:
             index = json.load(fp)
             if "counter" in index:
                 upper_id = index["counter"]
@@ -52,7 +52,7 @@ def get_upper_id(client, bucket):
 
 def write_conversion_index(client, index, bucket="meta-info", conversion_index="scraper-markdown-index.json"):
     bucket = client.bucket(bucket)
-    with bucket.open(conversion_index, "w") as fp:
+    with bucket.blob(conversion_index).open("w") as fp:
         json.dump(fp=fp, obj=index)
 
 
@@ -147,8 +147,12 @@ def convert_raw_data(client, target, target_bucket_name, counter, start_id):
         file_name = "%s.json" % i
         if file_name not in files:
             continue
-        with bucket.open(file_name, "w") as fp:
-            source_obj = json.load(fp)
+        with bucket.blob(file_name).open("r") as fp:
+            try:
+                source_obj = json.load(fp)
+            except Exception as e:
+                logging.warning("Failed to read scraped article: %s. Reason: %s" % (file_name, str(e)))
+                continue
             article = CONVERTER_REGISTRY[target][1](source_obj)
             output = {
                 "source": target,
@@ -161,7 +165,7 @@ def convert_raw_data(client, target, target_bucket_name, counter, start_id):
                 "summary_type": article.summary_type.name
             }
         target_fname = "%s.json" % counter
-        with target_bucket.open(target_fname, "w") as tfp:
+        with target_bucket.blob(target_fname).open("w") as tfp:
             json.dump(output, tfp)
             counter = counter + 1
 
@@ -172,7 +176,7 @@ TARGET_BUCKET = "markdown-converged"
 
 
 if __name__ == "__main__":
-    with closing(storage.Client()) as client:
+    with closing(storage.Client(project="msca310019-capstone-f945")) as client:
         conversion_idx = load_conversion_index(client)
         counter = conversion_idx["standardized"]
         logging.info("Starting conversion from idx: %s" % counter)
