@@ -266,8 +266,8 @@ class JSONFileDirectoryWriter(AbstractContextManager):
         if not os.path.isdir(self.directory):
             raise ValueError("Invalid Directory: " + self.directory)
 
-    def __exit__(self, __exc_type: Type[BaseException] | None, __exc_value: BaseException | None,
-                 __traceback: TracebackType | None) -> bool | None:
+    def __exit__(self, __exc_type, __exc_value,
+                 __traceback):
         pass
 
 

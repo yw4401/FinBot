@@ -86,19 +86,16 @@ RESET_TIME = 3600 * 24
 
 
 if __name__ == "__main__":
-    credentials = "/home/sdai/.config/gcloud/application_default_credentials.json"
-    auto_credentials, project_id = google.auth.default()
-
-    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945", credentials=auto_credentials)
+    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945")
     log_client.setup_logging()
     logging.getLogger().setLevel(logging.INFO)
 
-    writer, tracker, getter = create_new_state(credentials)
+    writer, tracker, getter = create_new_state()
     last_reset = time.time()
     while True:
         current_time = time.time()
         if current_time - last_reset > RESET_TIME:
-            writer, tracker, getter = create_new_state(credentials)
+            writer, tracker, getter = create_new_state()
             logging.info("Restarting scrape to get new articles")
             last_reset = time.time()
         start_scraper("cnbc", getter=getter, writer=writer, progressor=tracker, duration=5 * 60)
