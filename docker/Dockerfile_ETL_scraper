@@ -1,0 +1,12 @@
+FROM python:3-bullseye
+
+ENV PYTHONUNBUFFERED True
+ENV APP_HOME /FinBot
+WORKDIR $APP_HOME
+
+COPY ./pipeline/consolidate_scraper.py ./
+RUN pip install google-cloud-storage google-cloud-logging
+
+RUN python -c "from google.cloud import storage"
+
+ENTRYPOINT ["python", "consolidate_scraper.py"]

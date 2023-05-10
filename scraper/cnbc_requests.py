@@ -1,69 +1,106 @@
-import requests
-import json
+import logging
 import time
-import re
-from fake_useragent import UserAgent
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 
-
-ua = UserAgent()
-HEADERS = {
-    "User-Agent": ua.random,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,"
-              "application/signed-exchange;v=b3;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Accept-Language": "en-US,en;q=0.9"
-}
+from unstructured.partition.html import partition_html
+from lxml.html import tostring
+from unstructured.staging.base import convert_to_dict
+from nltk.tokenize import word_tokenize
+from common import *
+import google.cloud.logging
+import google.auth
 
 
 BASE_URL = "https://www.cnbc.com"
 LINKS_XPATH = "//a"
 
 
-def normalize_url(url, source_url):
-    url = urljoin(source_url, url)
-    if url[-1] == "#" or url[-1] == "/":
-        url = url[:-1]
-    return url
+@extractor_func(scraper="cnbc", required=True)
+def extract_article_section(root, output):
+    sub_sect = root.xpath("//a[@class='ArticleHeader-eyebrow']")[0]
+    output["subsection"] = sub_sect.text_content().strip()
 
 
-def extract_page(resp, source_url):
-    root = BeautifulSoup(resp.content, "html.parser")
-    result_set = set()
-    for l in root.find_all("a", href=True):
-        url = normalize_url(l["href"], source_url)
-        result_set.add(url)
-    return result_set, root
+@extractor_func(scraper="cnbc", required=True)
+def extract_article_title(root, output):
+    header_tag = root.xpath("//h1[@class='ArticleHeader-headline']")[0]
+    output["title"] = header_tag.text_content().strip()
 
 
-def get_urls(start_url, allowed_fqdn=".*", emit=lambda root: True):
-    visited = set()
-    url_matcher = re.compile(allowed_fqdn)
-    queue = [start_url]
-    while len(queue) != 0:
-        next_url = queue.pop(0)
-        if next_url in visited:
+@extractor_func(scraper="cnbc", required=True)
+def extract_published_time(root, output):
+    time_tag = root.xpath("//time[@data-testid='published-timestamp']")[0]
+    output["published"] = time_tag.attrib["datetime"]
+
+
+@extractor_func(scraper="cnbc", required=False)
+def extract_summary(root, output):
+    key_point_list = root.xpath("//div[@class='RenderKeyPoints-list']//ul")
+    if len(key_point_list) > 0:
+        key_point_list = key_point_list[0]
+    else:
+        return
+    key_points = []
+    for p in key_point_list.xpath(".//li"):
+        key_points.append(p.text_content().strip())
+    output["summary"] = key_points
+
+
+@extractor_func(scraper="cnbc", required=True)
+def extract_body(root, output):
+    body_section = partition_html(text=tostring(root.xpath("//div[contains(@class, 'ArticleBody-articleBody')]")[0]))
+    body_dicts = convert_to_dict(body_section)
+    accepted = {"Title", "NarrativeText"}
+    result = []
+
+    for d in body_dicts:
+        if len(word_tokenize(d["text"])) < 3:
             continue
-        if not url_matcher.match(next_url):
+        if "|" in d["text"]:
             continue
-        visited.add(next_url)
-        print("Visiting: " + next_url)
-        resp = requests.get(url=next_url, headers=HEADERS)
-        try:
-            page_links, root = extract_page(resp, next_url)
-        except ValueError:
-            print("Failed to get: " + next_url)
+        if d["type"] not in accepted:
             continue
-        queue.extend(page_links)
-        if emit(root):
-            yield next_url, str(root)
-        time.sleep(1)
+        result.append(
+            {
+                "type": d["type"],
+                "text": d["text"]
+            }
+        )
+
+    output["body"] = result
+
+
+def create_new_state(credential_path=None):
+    writer = GCPBucketDirectoryWriter(bucket="cnbc-articles",
+                                      credential_path=credential_path
+                                      )
+    with writer:
+        tracker = InMemProgressTracker(starting_set=[BASE_URL],
+                                       visited=writer.saved_pages,
+                                       filters=[create_robot_filter(BASE_URL),
+                                                create_regex_filter(r"https?://www\.cnbc\.com")])
+    getter = RequestGetter(retry=3)
+    return writer, tracker, getter
+
+
+RESET_TIME = 3600 * 24
 
 
 if __name__ == "__main__":
-    counter = 0
-    for url, source in get_urls(BASE_URL, allowed_fqdn=r".*cnbc\.com.*"):
-        with open("../cnbc_scrape/%s.json" % counter, "w") as fp:
-            json.dump({"url": url, "source": source}, fp)
-        counter = counter + 1
+    credentials = "/home/sdai/.config/gcloud/application_default_credentials.json"
+    auto_credentials, project_id = google.auth.default()
+
+    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945", credentials=auto_credentials)
+    log_client.setup_logging()
+    logging.getLogger().setLevel(logging.INFO)
+
+    writer, tracker, getter = create_new_state(credentials)
+    last_reset = time.time()
+    while True:
+        current_time = time.time()
+        if current_time - last_reset > RESET_TIME:
+            writer, tracker, getter = create_new_state(credentials)
+            logging.info("Restarting scrape to get new articles")
+            last_reset = time.time()
+        start_scraper("cnbc", getter=getter, writer=writer, progressor=tracker, duration=5 * 60)
+        with writer:
+            writer.write_index()
