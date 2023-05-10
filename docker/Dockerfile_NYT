@@ -1,0 +1,12 @@
+FROM python:3-bullseye
+
+ENV PYTHONUNBUFFERED True
+ENV APP_HOME /FinBot
+WORKDIR $APP_HOME
+
+COPY ./scraper/common.py ./scraper/nyt_scraper.py ./
+RUN pip install unstructured lxml nltk schedule fake-useragent beautifulsoup4 requests google-cloud-storage google-cloud-logging
+
+RUN python -c "import unstructured"
+
+ENTRYPOINT ["python", "nyt_scraper.py"]
