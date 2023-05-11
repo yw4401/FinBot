@@ -1,0 +1,17 @@
+Scientists have developed a noninvasive AI system focused on translating a person’s brain activity into a stream of text, according to a peer-reviewed study published Monday in the journal Nature Neuroscience.
+
+The system, called a semantic decoder, could ultimately benefit patients who have lost their ability to physically communicate after suffering from a stroke, paralysis or other degenerative diseases. Researchers at the University of Texas at Austin developed the system in part by using a transformer model, which is similar to those that support Google’s chatbot Bard and OpenAI’s chatbot ChatGPT. 
+
+The study’s participants trained the decoder by listening to several hours of podcasts within an fMRI scanner, which is a large piece of machinery that measures brain activity. The system requires no surgical implants. Once the AI system is trained, it can generate a stream of text when the participant is listening to or imagines telling a new story. The resultant text is not an exact transcript, rather the researchers designed it with the intent of capturing general thoughts or ideas. 
+
+According to a news release, the trained system produces text that closely or precisely matches the intended meaning of the participant’s original words around half of the time. 
+
+For instance, when a participant heard the words “I don’t have my driver’s license yet” during an experiment, the thoughts were translated to, “She has not even started to learn to drive yet.”  
+
+“For a noninvasive method, this is a real leap forward compared to what’s been done before, which is typically single words or short sentences,” Alexander Huth, one of the leaders of the study, said in the release. “We’re getting the model to decode continuous language for extended periods of time with complicated ideas.”
+
+Participants were also asked to watch four videos without audio while in the scanner, and the AI system was able to accurately describe “certain events” from them, the release said. 
+
+As of Monday, the decoder can’t be used outside of a laboratory setting because it relies on the fMRI scanner. But the researchers believe it could eventually be used via more portable brain-imaging systems.
+
+The leading researchers of the study have filed a PCT patent application for the technology. 
