@@ -34,7 +34,7 @@ if uploaded_file:
             val = 2
             if current_val in LABEL_DICT:
                 val = LABEL_DICT[current_val]
-            label = st.radio("Is this chunk relevant?", ["Relevant", "Not Relevant", "Not Labeled"],
+            label = st.radio("Is this chunk relevant to investing?", ["Relevant", "Not Relevant", "Not Labeled"],
                              key=str(i), index=val)
             if label:
                 source_df.iloc[i, source_df.columns.get_loc(LABEL_COL)] = label

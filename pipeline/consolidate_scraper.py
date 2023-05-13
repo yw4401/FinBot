@@ -85,9 +85,9 @@ def convert_cnbc(cnbc_dict):
     body = ""
     for d in cnbc_dict["body"]:
         if d["type"] == "Title":
-            body = body + "## " + normalize_text(d["text"]) + "\n"
+            body = body + "## " + normalize_text(d["text"]) + "\n\n"
         if d["type"] == "NarrativeText":
-            body = body + normalize_text(d["text"]) + "\n"
+            body = body + normalize_text(d["text"]) + "\n\n"
     body = body.strip()
 
     summary = ""
@@ -108,11 +108,13 @@ def convert_cnbc(cnbc_dict):
 def convert_reuters(reuter_dict):
     title = reuter_dict["title"]
     category = reuter_dict["subsection"]
+    if len(title) < len(category):
+        title, category = category, title
     published = datetime.strptime(reuter_dict["published"].strip(), "%B %d, %Y %I:%M %p")
 
     body = ""
     for b in reuter_dict["body"].split("\n\n"):
-        body = body + normalize_text(b) + "\n"
+        body = body + normalize_text(b) + "\n\n"
     body = body.strip()
 
     summary = ""
@@ -131,9 +133,36 @@ def convert_reuters(reuter_dict):
     )
 
 
+def convert_nyt(nyt_dict):
+    title = nyt_dict["title"]
+    category = nyt_dict["subsection"]
+    published = datetime.strptime(nyt_dict["published"].strip(), "%Y-%m-%dT%H:%M:%S%z")
+
+    body = ""
+    for b in nyt_dict["body"].split("\n\n"):
+        body = body + normalize_text(b) + "\n\n"
+    body = body.strip()
+
+    summary = ""
+    summary_type = SummaryType.NULL
+    if "summary" in nyt_dict:
+        summary_type = SummaryType.PLAIN
+        summary = nyt_dict["summary"]
+
+    return Article(
+        category=category,
+        title=title,
+        published=published,
+        body=body,
+        summary=summary,
+        summary_type=summary_type
+    )
+
+
 CONVERTER_REGISTRY = {
     "cnbc": ("cnbc-articles", convert_cnbc),
-    "reuters": ("reuters-articles", convert_reuters)
+    "reuters": ("reuters-articles", convert_reuters),
+    "nyt": ("nyt-articles", convert_nyt)
 }
 
 
