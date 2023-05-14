@@ -7,6 +7,8 @@ from datetime import datetime
 from google.cloud import storage
 import google.cloud.logging
 from enum import Enum
+from multiprocessing import Pool
+from multiprocessing import cpu_count
 
 
 class SummaryType(Enum):
@@ -169,38 +171,46 @@ CONVERTER_REGISTRY = {
 }
 
 
-def convert_raw_data(client, target, target_bucket_name, counter, start_id):
-    source_bucket = CONVERTER_REGISTRY[target][0]
-    upper_exc = get_upper_id(client, source_bucket)
-    files = set([f.name for f in client.list_blobs(bucket_or_name=source_bucket)])
-    bucket = client.bucket(source_bucket)
-    target_bucket = client.bucket(target_bucket_name)
-
-    for i in range(start_id, upper_exc):
-        file_name = "%s.json" % i
-        if file_name not in files:
-            continue
-        with bucket.blob(file_name).open("r") as fp:
-            try:
-                source_obj = json.load(fp)
-            except Exception as e:
-                logging.warning("Failed to read scraped article: %s. Reason: %s" % (file_name, str(e)))
+def convert_raw_data(project, target, target_bucket_name, counter, start_id, chunks=100):
+    jobs = []
+    with closing(storage.Client(project=project)) as client:
+        source_bucket = CONVERTER_REGISTRY[target][0]
+        upper_exc = get_upper_id(client, source_bucket)
+        files = set([f.name for f in client.list_blobs(bucket_or_name=source_bucket)])
+        for i in range(start_id, upper_exc):
+            file_name = "%s.json" % i
+            if file_name not in files:
                 continue
-            article = CONVERTER_REGISTRY[target][1](source_obj)
-            output = {
-                "source": target,
-                "id": i,
-                "category": article.category,
-                "title": article.title,
-                "published": article.published.isoformat(),
-                "body": article.body,
-                "summary": article.summary,
-                "summary_type": article.summary_type.name
-            }
-        target_fname = "%s.json" % counter
-        with target_bucket.blob(target_fname).open("w") as tfp:
-            json.dump(output, tfp)
+            target_fname = "%s.json" % counter
             counter = counter + 1
+            jobs.append((file_name, target_fname))
+
+    def convert(file_name, target_fname):
+        with closing(storage.Client(project=project)):
+            bucket = client.bucket(source_bucket)
+            target_bucket = client.bucket(target_bucket_name)
+            with bucket.blob(file_name).open("r") as fp:
+                try:
+                    source_obj = json.load(fp)
+                except Exception as e:
+                    logging.warning("Failed to read scraped article: %s. Reason: %s" % (file_name, str(e)))
+                    return
+                article = CONVERTER_REGISTRY[target][1](source_obj)
+                output = {
+                    "source": target,
+                    "id": i,
+                    "category": article.category,
+                    "title": article.title,
+                    "published": article.published.isoformat(),
+                    "body": article.body,
+                    "summary": article.summary,
+                    "summary_type": article.summary_type.name
+                }
+            with target_bucket.blob(target_fname).open("w") as tfp:
+                json.dump(output, tfp)
+
+    with Pool(cpu_count()) as pool:
+        pool.imap_unordered(convert, jobs, chunksize=chunks)
 
     return counter, upper_exc
 
