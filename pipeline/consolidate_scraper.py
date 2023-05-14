@@ -171,6 +171,31 @@ CONVERTER_REGISTRY = {
 }
 
 
+def convert(file_name, target_fname, source_bucket, target_bucket_name, project, i):
+    with closing(storage.Client(project=project)):
+        bucket = client.bucket(source_bucket)
+        target_bucket = client.bucket(target_bucket_name)
+        with bucket.blob(file_name).open("r") as fp:
+            try:
+                source_obj = json.load(fp)
+            except Exception as e:
+                logging.warning("Failed to read scraped article: %s. Reason: %s" % (file_name, str(e)))
+                return
+            article = CONVERTER_REGISTRY[target][1](source_obj)
+            output = {
+                "source": target,
+                "id": i,
+                "category": article.category,
+                "title": article.title,
+                "published": article.published.isoformat(),
+                "body": article.body,
+                "summary": article.summary,
+                "summary_type": article.summary_type.name
+            }
+        with target_bucket.blob(target_fname).open("w") as tfp:
+            json.dump(output, tfp)
+
+
 def convert_raw_data(project, target, target_bucket_name, counter, start_id, chunks=100):
     jobs = []
     with closing(storage.Client(project=project)) as client:
@@ -182,35 +207,13 @@ def convert_raw_data(project, target, target_bucket_name, counter, start_id, chu
             if file_name not in files:
                 continue
             target_fname = "%s.json" % counter
+            jobs.append((file_name, target_fname, source_bucket, target_bucket_name, project, counter))
             counter = counter + 1
-            jobs.append((file_name, target_fname))
 
-    def convert(file_name, target_fname):
-        with closing(storage.Client(project=project)):
-            bucket = client.bucket(source_bucket)
-            target_bucket = client.bucket(target_bucket_name)
-            with bucket.blob(file_name).open("r") as fp:
-                try:
-                    source_obj = json.load(fp)
-                except Exception as e:
-                    logging.warning("Failed to read scraped article: %s. Reason: %s" % (file_name, str(e)))
-                    return
-                article = CONVERTER_REGISTRY[target][1](source_obj)
-                output = {
-                    "source": target,
-                    "id": i,
-                    "category": article.category,
-                    "title": article.title,
-                    "published": article.published.isoformat(),
-                    "body": article.body,
-                    "summary": article.summary,
-                    "summary_type": article.summary_type.name
-                }
-            with target_bucket.blob(target_fname).open("w") as tfp:
-                json.dump(output, tfp)
-
+    logging.info("Submitting %s jobs to process entries" % len(jobs))
     with Pool(cpu_count()) as pool:
-        pool.imap_unordered(convert, jobs, chunksize=chunks)
+        for _ in pool.starmap(convert, jobs, chunksize=chunks):
+            pass
 
     return counter, upper_exc
 
@@ -227,15 +230,16 @@ if __name__ == "__main__":
         counter = conversion_idx["standardized"]
         logging.info("Starting conversion from idx: %s" % counter)
 
-        for target in CONVERTER_REGISTRY:
-            logging.info("Starting to process %s from idx: %s" % (target, conversion_idx[target]))
-            try:
-                counter, next_start = convert_raw_data(client, target, TARGET_BUCKET, counter, conversion_idx[target])
-            except Exception as e:
-                logging.error("Failed to process: %s. Reason: %s" % (target, e))
-                continue
-            conversion_idx[target] = next_start
-            conversion_idx["standardized"] = counter
+    for target in CONVERTER_REGISTRY:
+        logging.info("Starting to process %s from idx: %s" % (target, conversion_idx[target]))
+        try:
+            counter, next_start = convert_raw_data("msca310019-capstone-f945", target, TARGET_BUCKET, counter, conversion_idx[target])
+        except Exception as e:
+            logging.error("Failed to process: %s. Reason: %s" % (target, e))
+            continue
+        conversion_idx[target] = next_start
+        conversion_idx["standardized"] = counter
+        with closing(storage.Client(project="msca310019-capstone-f945")) as client:
             write_conversion_index(client, conversion_idx)
-            logging.info("Ended processing %s up to idx: %s" % (target, conversion_idx[target]))
-            logging.info("Starting next batch from idx: %s" % counter)
+        logging.info("Ended processing %s up to idx: %s" % (target, conversion_idx[target]))
+        logging.info("Starting next batch from idx: %s" % counter)
