@@ -144,8 +144,11 @@ def convert_nyt(nyt_dict):
     published = datetime.strptime(nyt_dict["published"].strip(), "%Y-%m-%dT%H:%M:%S%z")
 
     body = ""
-    for b in nyt_dict["body"].split("\n\n"):
-        body = body + normalize_text(b) + "\n\n"
+    for d in nyt_dict["body"]:
+        if d["type"] == "Title":
+            body = body + "## " + normalize_text(d["text"]) + "\n\n"
+        if d["type"] == "NarrativeText":
+            body = body + normalize_text(d["text"]) + "\n\n"
     body = body.strip()
 
     summary = ""
