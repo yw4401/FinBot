@@ -26,6 +26,7 @@ def load_conversion_index(client, bucket="meta-info", conversion_index="scraper-
         return {
             "cnbc": 0,
             "reuters": 0,
+            "nyt": 0,
             "standardized": 0
         }
     bucket = client.bucket(bucket)
@@ -35,6 +36,8 @@ def load_conversion_index(client, bucket="meta-info", conversion_index="scraper-
             index["cnbc"] = 0
         if "reuters" not in index:
             index["reuters"] = 0
+        if "nyt" not in index:
+            index["nyt"] = 0
         if "standardized" not in index:
             index["standardized"] = 0
     return index
