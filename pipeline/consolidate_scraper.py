@@ -9,6 +9,7 @@ import google.cloud.logging
 from enum import Enum
 from multiprocessing import Pool
 from multiprocessing import cpu_count
+import traceback
 
 
 class SummaryType(Enum):
@@ -144,6 +145,8 @@ def convert_nyt(nyt_dict):
     published = datetime.strptime(nyt_dict["published"].strip(), "%Y-%m-%dT%H:%M:%S%z")
 
     body = ""
+    if "body" not in nyt_dict:
+        raise ValueError("Invalid entry: Missing body")
     for d in nyt_dict["body"]:
         if d["type"] == "Title":
             body = body + "## " + normalize_text(d["text"]) + "\n\n"
@@ -184,7 +187,11 @@ def convert(file_name, target_fname, source_bucket, target_bucket_name, project,
             except Exception as e:
                 logging.warning("Failed to read scraped article: %s. Reason: %s" % (file_name, str(e)))
                 return
-            article = CONVERTER_REGISTRY[target][1](source_obj)
+            try:
+                article = CONVERTER_REGISTRY[target][1](source_obj)
+            except ValueError as e:
+                logging.warning("Failed to convert scraped article: %s. Reason: %s" % (file_name, str(e)))
+                return
             output = {
                 "source": target,
                 "id": i,
