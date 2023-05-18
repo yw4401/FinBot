@@ -1,20 +1,9 @@
-import torch
-from transformers import LlamaForCausalLM, LlamaTokenizer
 import pandas as pd
 import numpy as np
 import random
 import logging
 from datetime import datetime
-import vertexai
-from vertexai.preview.language_models import TextGenerationModel
 import re
-import openai
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_random_exponential,
-)  # for exponential backoff
-import tiktoken
 from collections import namedtuple
 from fractions import Fraction
 
@@ -204,10 +193,21 @@ def create_topic_summarizer(kind="vertex-ai", **kwargs):
     """
     
     if kind == "koala":
+        import torch
+        from transformers import LlamaForCausalLM, LlamaTokenizer
         return create_koala_topic_summarizer(**kwargs)
     if kind == "vertex-ai":
+        import vertexai
+        from vertexai.preview.language_models import TextGenerationModel
         return create_palm2_summarizer(**kwargs)
     if kind == "openai":
+        import openai
+        from tenacity import (
+            retry,
+            stop_after_attempt,
+            wait_random_exponential,
+        )  # for exponential backoff
+        import tiktoken
         return create_openai_summarizer(**kwargs)
     raise ValueError("Invalid kind: " + kind)
     
@@ -397,9 +397,35 @@ def create_topic_filter(kind="openai", **kwargs):
     
     if kind == "koala":
         # Note the Koala one doesn't work rn
+        import torch
+        from transformers import LlamaForCausalLM, LlamaTokenizer
         return create_koala_filter(**kwargs)
     if kind == "vertex-ai":
+        import vertexai
+        from vertexai.preview.language_models import TextGenerationModel
         return create_palm2_filter(**kwargs)
     if kind == "openai":
+        import openai
+        from tenacity import (
+            retry,
+            stop_after_attempt,
+            wait_random_exponential,
+        )  # for exponential backoff
+        import tiktoken
         return create_openai_filter(**kwargs)
     raise ValueError("Invalid kind: " + kind)
+    
+    
+def load_faiss_topic_filter(path, embed_model):
+    import faiss
+    index = faiss.read_index(path)
+    
+    def filter_topic(query, init_df, k=50):
+        vector_query = np.array(embed_model.get_query_embedding(query))
+        vector_query = np.reshape(vector_query, (1, len(vector_query)))
+        vector_query = vector_query.astype("float32")
+        D, I = index.search(vector_query, k=k)
+        logging.info("Semantic Index found topics: " + str(I))
+        return init_df.loc[init_df.topics.isin(I[0])]
+    
+    return filter_topic
