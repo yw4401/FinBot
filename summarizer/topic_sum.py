@@ -6,6 +6,13 @@ from datetime import datetime
 import re
 from collections import namedtuple
 from fractions import Fraction
+import openai
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential,
+)  # for exponential backoff
+import tiktoken
 
 
 BASE_PROMPT = """A list of news article titles with the published time is given below. Using only the provided information, summarize the theme of the titles such that it will be easy to answer investing related questions from the summary. Be specific about the dates and entities involved and try to not omit important details. Do not use vague terms such as "past few month" or "various companies".\n\n"""
@@ -405,13 +412,6 @@ def create_topic_filter(kind="openai", **kwargs):
         from vertexai.preview.language_models import TextGenerationModel
         return create_palm2_filter(**kwargs)
     if kind == "openai":
-        import openai
-        from tenacity import (
-            retry,
-            stop_after_attempt,
-            wait_random_exponential,
-        )  # for exponential backoff
-        import tiktoken
         return create_openai_filter(**kwargs)
     raise ValueError("Invalid kind: " + kind)
     
