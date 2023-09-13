@@ -15,10 +15,12 @@ from spacy.tokens import Doc
 from spacy.tokens import Span
 from tqdm import tqdm
 
+import config
+
 pandarallel.initialize(nb_workers=3, progress_bar=True)
 
 
-def load_coref_index(client, bucket="meta-info", coref_index="coref-index.json"):
+def load_coref_index(client, bucket=config.ARTICLE_CONVERT_META_BUCKET, coref_index=config.ARTICLE_COREF_IDX):
     files = set([f.name for f in client.list_blobs(bucket_or_name=bucket)])
     if coref_index not in files:
         return {
@@ -32,13 +34,13 @@ def load_coref_index(client, bucket="meta-info", coref_index="coref-index.json")
     return index
 
 
-def get_coref_converted(client, bucket="markdown-corref"):
+def get_coref_converted(client, bucket=config.ARTICLE_COREF_TARGET_BUCKET):
     files = set([f.name for f in client.list_blobs(bucket_or_name=bucket)])
     return files
 
 
-def get_coref_work(source="markdown-converged", filter_f=lambda article: True):
-    with closing(storage.Client(project="msca310019-capstone-f945")) as client:
+def get_coref_work(source=config.ARTICLE_COREF_SRC_BUCKET, filter_f=lambda article: True):
+    with closing(storage.Client(project=config.GCP_PROJECT)) as client:
         errors = set(load_coref_index(client)["error"])
         done = get_coref_converted(client)
         tbd = set([f.name for f in client.list_blobs(bucket_or_name=source)])
@@ -48,7 +50,7 @@ def get_coref_work(source="markdown-converged", filter_f=lambda article: True):
         })
 
     def filter_article(f_name):
-        with closing(storage.Client(project="msca310019-capstone-f945")) as client:
+        with closing(storage.Client(project=config.GCP_PROJECT)) as client:
             bucket = client.bucket(source)
             with bucket.blob(f_name).open("r") as fp:
                 article = json.load(fp)
@@ -143,12 +145,6 @@ def improved_replace_corefs(document, clusters):
     return "".join(resolved)
 
 
-allen_url = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2021.03.10.tar.gz"
-predictor = Predictor.from_path(allen_url, cuda_device=torch.cuda.current_device())
-spacy.require_cpu()
-nlp = spacy.load("en_core_web_sm")
-
-
 def fetch_articles(client, max_id, index, bucket="markdown-converged"):
     bucket = client.bucket(bucket)
     for i in range(index["standardized"], max_id):
@@ -169,7 +165,7 @@ def window_sentences(sentences, idx, pre=5, sep="\n\n"):
     return result
 
 
-def coref_text_whole(article, predictor):
+def coref_text_whole(article, predictor, nlp):
     article = article.strip()
     if len(article) == 0:
         return ""
@@ -179,7 +175,7 @@ def coref_text_whole(article, predictor):
     return coref_article
 
 
-def coref_text_parts(sentences, predictor):
+def coref_text_parts(sentences, predictor, nlp):
     sentences = list(sentences)
 
     for i in range(len(sentences)):
@@ -196,9 +192,9 @@ def coref_text_parts(sentences, predictor):
     return sentences
 
 
-def coref_text(article):
+def coref_text(article, predictor, nlp):
     try:
-        return coref_text_whole(article, predictor)
+        return coref_text_whole(article, predictor, nlp)
     except Exception:
         gc.collect()
         torch.cuda.empty_cache()
@@ -211,10 +207,14 @@ def year_filter(article, year=2023):
 
 
 if __name__ == "__main__":
-    client = storage.Client(project="msca310019-capstone-f945")
+    predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
+    spacy.require_cpu()
+    nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
+
+    client = storage.Client(project=config.GCP_PROJECT)
     works = get_coref_work(filter_f=year_filter)
 
-    bucket = client.bucket("markdown-corref")
+    bucket = client.bucket(config.ARTICLE_COREF_TARGET_BUCKET)
     idx = load_coref_index(client)
     errors = set(idx["error"])
 
@@ -222,7 +222,7 @@ if __name__ == "__main__":
         for f_name, article in works:
             corref_body = ""
             if len(article["body"]) > 0:
-                corref_body = coref_text(article["body"])
+                corref_body = coref_text(article["body"], predictor, nlp)
             if corref_body:
                 with bucket.blob(f_name).open("w") as fp:
                     article["body"] = corref_body
