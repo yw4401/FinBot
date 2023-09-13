@@ -201,18 +201,21 @@ def coref_text(article, predictor, nlp):
         return None
 
 
-def year_filter(article, year=2023):
-    timestamp = datetime.fromisoformat(article["published"])
-    return timestamp.year == year
+def year_filter_generator(year):
+    def filter(article):
+        timestamp = datetime.fromisoformat(article["published"])
+        return timestamp.year == year
+    return filter
 
 
 if __name__ == "__main__":
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
     spacy.require_cpu()
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
+    year = 2023
 
     client = storage.Client(project=config.GCP_PROJECT)
-    works = get_coref_work(filter_f=year_filter)
+    works = get_coref_work(filter_f=year_filter_generator(year))
 
     bucket = client.bucket(config.ARTICLE_COREF_TARGET_BUCKET)
     idx = load_coref_index(client)
