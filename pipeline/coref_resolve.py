@@ -15,7 +15,7 @@ from spacy.tokens import Doc
 from spacy.tokens import Span
 from tqdm import tqdm
 
-pandarallel.initialize(nb_workers=3, progress_bar=True)
+pandarallel.initialize(progress_bar=True)
 
 
 def load_coref_index(client, bucket="meta-info", coref_index="coref-index.json"):
