@@ -24,16 +24,15 @@ from summarizer.topic_sum import create_topic_filter, load_faiss_topic_filter
 
 logging.basicConfig(level=logging.WARN, stream=sys.stdout)
 
-"""
-topics_summary_file can be acquired from gs://scraped-news-article-data-null/2023-topics-openai.parquet
-open_ai_api_file can be acquired from gs://scraped-news-article-data-null/apikey
-persist_dir_base and faiss_path can be acquired from gs://scraped-news-article-data-null/demo_setup.tar.xz. 
+#
+#topics_summary_file can be acquired from gs://scraped-news-article-data-null/2023-topics-openai.parquet
+#open_ai_api_file can be acquired from gs://scraped-news-article-data-null/apikey
+#persist_dir_base and faiss_path can be acquired from gs://scraped-news-article-data-null/demo_setup.tar.xz.
 
-For the persist_dir_base and faiss_path, extract the archive, and the .index file is the faiss path. The directory 
-is the persist_dir_base.
+#For the persist_dir_base and faiss_path, extract the archive, and the .index file is the faiss path. The directory
+#is the persist_dir_base.
 
-To run the code, adjust the following variables appropriately so that they point to the right location.
-"""
+#To run the code, adjust the following variables appropriately so that they point to the right location.
 
 topics_summary_file = "/home/sdai/Documents/ConversationAI/2023-topics-openai.parquet"
 open_ai_api_file = "/home/sdai/Documents/ConversationAI/apikey"
