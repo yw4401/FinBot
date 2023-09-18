@@ -11,19 +11,21 @@ from multiprocessing import Pool
 from multiprocessing import cpu_count
 import traceback
 
+import config
+
 
 class SummaryType(Enum):
-
     NULL = 0,
     BULLETS = 1,
     PLAIN = 2
 
 
-BUCKET_IDX_FILE = "index.json"
+BUCKET_IDX_FILE = config.ARTICLE_BUCKET_IDX
 Article = namedtuple('Article', ['category', 'title', 'published', 'body', 'summary', 'summary_type'])
 
 
-def load_conversion_index(client, bucket="meta-info", conversion_index="scraper-markdown-index.json"):
+def load_conversion_index(client, bucket=config.ARTICLE_CONVERT_META_BUCKET,
+                          conversion_index=config.ARTICLE_CONVERT_META_IDX):
     files = set([f.name for f in client.list_blobs(bucket_or_name=bucket)])
     if conversion_index not in files:
         return {
@@ -57,7 +59,8 @@ def get_upper_id(client, bucket):
     return upper_id
 
 
-def write_conversion_index(client, index, bucket="meta-info", conversion_index="scraper-markdown-index.json"):
+def write_conversion_index(client, index, bucket=config.ARTICLE_CONVERT_META_BUCKET,
+                           conversion_index=config.ARTICLE_CONVERT_META_IDX):
     bucket = client.bucket(bucket)
     with bucket.blob(conversion_index).open("w") as fp:
         json.dump(fp=fp, obj=index)
@@ -77,6 +80,8 @@ def extract_summary(summary_list):
             summary_type = SummaryType.PLAIN
     else:
         for s in summary_list:
+            if s.strip() == "":
+                continue
             summary = summary + "* " + normalize_text(s) + "\n"
         summary = summary.strip()
         summary_type = SummaryType.BULLETS
@@ -86,7 +91,7 @@ def extract_summary(summary_list):
 def convert_cnbc(cnbc_dict):
     title = cnbc_dict["title"]
     category = cnbc_dict["subsection"]
-    published = datetime.strptime(cnbc_dict["published"], "%Y-%m-%dT%H:%M:%S%z")
+    published = datetime.strptime(cnbc_dict["published"], config.ARTICLE_CONVERT_CNBC_DATE)
 
     body = ""
     for d in cnbc_dict["body"]:
@@ -116,7 +121,7 @@ def convert_reuters(reuter_dict):
     category = reuter_dict["subsection"]
     if len(title) < len(category):
         title, category = category, title
-    published = datetime.strptime(reuter_dict["published"].strip(), "%B %d, %Y %I:%M %p")
+    published = datetime.strptime(reuter_dict["published"].strip(), config.ARTICLE_CONVERT_REUTER_DATE)
 
     body = ""
     for b in reuter_dict["body"].split("\n\n"):
@@ -142,7 +147,7 @@ def convert_reuters(reuter_dict):
 def convert_nyt(nyt_dict):
     title = nyt_dict["title"]
     category = nyt_dict["subsection"]
-    published = datetime.strptime(nyt_dict["published"].strip(), "%Y-%m-%dT%H:%M:%S%z")
+    published = datetime.strptime(nyt_dict["published"].strip(), config.ARTICLE_CONVERT_NYT_DATE)
 
     body = ""
     if "body" not in nyt_dict:
@@ -206,7 +211,7 @@ def convert(file_name, target_fname, source_bucket, target_bucket_name, project,
             json.dump(output, tfp)
 
 
-def convert_raw_data(project, target, target_bucket_name, counter, start_id, chunks=100):
+def convert_raw_data(project, target, target_bucket_name, counter, start_id, chunks=config.ARTICLE_CONVERT_CHUNK):
     jobs = []
     with closing(storage.Client(project=project)) as client:
         source_bucket = CONVERTER_REGISTRY[target][0]
@@ -228,14 +233,13 @@ def convert_raw_data(project, target, target_bucket_name, counter, start_id, chu
     return counter, upper_exc
 
 
-TARGET_BUCKET = "markdown-converged"
-
+TARGET_BUCKET = config.ARTICLE_TARGET_BUCKET
 
 if __name__ == "__main__":
-    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945")
+    log_client = google.cloud.logging.Client(project=config.GCP_PROJECT)
     log_client.setup_logging()
     logging.getLogger().setLevel(logging.INFO)
-    with closing(storage.Client(project="msca310019-capstone-f945")) as client:
+    with closing(storage.Client(project=config.GCP_PROJECT)) as client:
         conversion_idx = load_conversion_index(client)
         counter = conversion_idx["standardized"]
         logging.info("Starting conversion from idx: %s" % counter)
@@ -243,13 +247,14 @@ if __name__ == "__main__":
     for target in CONVERTER_REGISTRY:
         logging.info("Starting to process %s from idx: %s" % (target, conversion_idx[target]))
         try:
-            counter, next_start = convert_raw_data("msca310019-capstone-f945", target, TARGET_BUCKET, counter, conversion_idx[target])
+            counter, next_start = convert_raw_data(config.GCP_PROJECT, target, TARGET_BUCKET, counter,
+                                                   conversion_idx[target])
         except Exception as e:
             logging.error("Failed to process: %s. Reason: %s" % (target, e))
             continue
         conversion_idx[target] = next_start
         conversion_idx["standardized"] = counter
-        with closing(storage.Client(project="msca310019-capstone-f945")) as client:
+        with closing(storage.Client(project=config.GCP_PROJECT)) as client:
             write_conversion_index(client, conversion_idx)
         logging.info("Ended processing %s up to idx: %s" % (target, conversion_idx[target]))
         logging.info("Starting next batch from idx: %s" % counter)
