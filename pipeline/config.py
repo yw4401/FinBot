@@ -16,3 +16,5 @@ ARTICLE_COREF_TARGET_BUCKET = "markdown-corref"
 ARTICLE_COREF_SRC_BUCKET = ARTICLE_TARGET_BUCKET
 ARTICLE_COREF_MOD_URL = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2021.03.10.tar.gz"
 ARTICLE_COREF_SPACY_MOD = "en_core_web_sm"
+ARTICLE_COREF_SUBSAMPLE_TARGET = "scraped-news-article-data-null"
+ARTICLE_COREF_SUBSAMPLE_FILE = "subsample-{year}-{month}.parquet"
