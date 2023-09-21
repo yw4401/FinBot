@@ -18,3 +18,22 @@ ARTICLE_COREF_MOD_URL = "https://storage.googleapis.com/allennlp-public-models/c
 ARTICLE_COREF_SPACY_MOD = "en_core_web_sm"
 ARTICLE_COREF_SUBSAMPLE_TARGET = "scraped-news-article-data-null"
 ARTICLE_COREF_SUBSAMPLE_FILE = "subsample-{year}-{month}.parquet"
+
+# Topic Extraction
+TOPIC_EMBEDDING = "all-MiniLM-L6-v2"
+TOPIC_UMAP_NEIGHBORS = 15
+TOPIC_UMAP_COMPONENTS = 5
+TOPIC_UMAP_MIN_DIST = 0
+TOPIC_UMAP_METRIC = "euclidean"
+TOPIC_HDBSCAN_MIN_SIZE = 5
+TOPIC_HDBSCAN_METRIC = "euclidean"
+TOPIC_SUBSAMPLE_TARGET = ARTICLE_COREF_SUBSAMPLE_TARGET
+TOPIC_SUBSAMPLE_FILE = "topic-{year}-{month}.parquet"
+
+# Topic Summarization
+TOPIC_SUM_KIND = "openai"
+TOPIC_SUM_MODEL_PARAMS = {
+    "api_key": "../key"
+}
+TOPIC_SUM_TARGET = "scraped-news-article-data-null"
+TOPIC_SUM_TARGET_FILE = "topicsum-{year}-{month}.parquet"
