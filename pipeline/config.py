@@ -37,3 +37,10 @@ TOPIC_SUM_MODEL_PARAMS = {
 }
 TOPIC_SUM_TARGET = "scraped-news-article-data-null"
 TOPIC_SUM_TARGET_FILE = "topicsum-{year}-{month}.parquet"
+
+# FAISS Articles
+ARTICLE_FAISS_TEMP_DIRECTORY = "./article_faiss"
+ARTICLE_FAISS_EMBEDDING = "all-MiniLM-L6-v2"
+ARTICLE_FAISS_TARGET = "scraped-news-article-data-null"
+ARTICLE_FAISS_FILE = "article-faiss-{year}-{month}.zip"
+ARTICLE_FAISS_BATCH = 16
