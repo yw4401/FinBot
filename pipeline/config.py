@@ -44,3 +44,11 @@ ARTICLE_FAISS_EMBEDDING = "all-MiniLM-L6-v2"
 ARTICLE_FAISS_TARGET = "scraped-news-article-data-null"
 ARTICLE_FAISS_FILE = "article-faiss-{year}-{month}.zip"
 ARTICLE_FAISS_BATCH = 16
+ARTICLE_FAISS_PROCESSES = None
+
+# FAISS Topics
+TOPIC_FAISS_TEMP_INDEX = "./faiss_topic.index"
+TOPIC_FAISS_EMBEDDING = "all-MiniLM-L6-v2"
+TOPIC_FAISS_TARGET = "scraped-news-article-data-null"
+TOPIC_FAISS_FILE = "faiss-topic-{year}-{month}.zip"
+TOPIC_FAISS_BATCH = 16
