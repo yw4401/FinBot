@@ -18,26 +18,34 @@ from llama_index.storage.docstore import SimpleDocumentStore
 from llama_index.storage.index_store import SimpleIndexStore
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import SimpleVectorStore
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizer, PreTrainedModel
 
 from summarizer.topic_sum import create_topic_filter, load_faiss_topic_filter
+import summarizer.config
+import pipeline.config
 
 logging.basicConfig(level=logging.WARN, stream=sys.stdout)
 
 #
-#topics_summary_file can be acquired from gs://scraped-news-article-data-null/2023-topics-openai.parquet
-#open_ai_api_file can be acquired from gs://scraped-news-article-data-null/apikey
-#persist_dir_base and faiss_path can be acquired from gs://scraped-news-article-data-null/demo_setup.tar.xz.
+# topics_summary_file can be acquired from gs://scraped-news-article-data-null/2023-topics-openai.parquet
+# open_ai_api_file can be acquired from gs://scraped-news-article-data-null/apikey
+# persist_dir_base and faiss_path can be acquired from gs://scraped-news-article-data-null/demo_setup.tar.xz.
 
-#For the persist_dir_base and faiss_path, extract the archive, and the .index file is the faiss path. The directory
-#is the persist_dir_base.
+# For the persist_dir_base and faiss_path, extract the archive, and the .index file is the faiss path. The directory
+# is the persist_dir_base.
 
-#To run the code, adjust the following variables appropriately so that they point to the right location.
+# To run the code, adjust the following variables appropriately so that they point to the right location.
 
-topics_summary_file = "/home/sdai/Documents/ConversationAI/2023-topics-openai.parquet"
-open_ai_api_file = "/home/sdai/Documents/ConversationAI/apikey"
-persist_dir_base = "/home/sdai/Documents/ConversationAI/topic_indices"
-faiss_path = "/home/sdai/Documents/ConversationAI/faiss_topic.index"
+year = 2023
+month = 4
+
+topics_summary_file = str(Path(summarizer.config.TOPIC_SUMMARY_DIR,
+                           summarizer.config.TOPIC_SUMMARY_PATTERN.format(year=year, month=month)))
+open_ai_api_file = str(summarizer.config.OPENAI_API)
+persist_dir_base = str(Path(summarizer.config.TOPIC_ARTICLES_INDICES_DIR,
+                        summarizer.config.TOPIC_ARTICLES_INDICES_PATTERN.format(year=year, month=month)))
+faiss_path = str(Path(summarizer.config.TOPIC_SUMMARY_INDEX_DIR,
+                  summarizer.config.TOPIC_SUMMARY_INDEX_PATTERN.format(year=year, month=month)))
 
 OPENAI_FINAL_PROMPT = "Summarize the provided information such that it answers the given inquiry and only the given inquiry. " + \
                       "The response should read well in addition to providing relevant and accurate information." + \
@@ -54,18 +62,18 @@ with open(open_ai_api_file, "r") as api_fp:
     api_key = api_fp.read().strip()
 
 filter_llm = create_topic_filter(api_key=api_key, temperature=0)
-embed_model = LangchainEmbedding(HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"))
+embed_model = LangchainEmbedding(HuggingFaceEmbeddings(model_name=pipeline.config.ARTICLE_FAISS_EMBEDDING))
 
 
 class LlamaBased(LLM):
-    tokenizer: LlamaTokenizer
-    model: LlamaForCausalLM
+    tokenizer: PreTrainedTokenizer
+    model: PreTrainedModel
     max_new_tokens: int
     query_helper: SimpleInputPrompt
 
     def __init__(self, model_path, max_new_tokens, query_helper):
-        tokenizer = LlamaTokenizer.from_pretrained(model_path, device_map="auto", max_input_size=2048)
-        model = LlamaForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, device_map="auto")
+        tokenizer = AutoTokenizer.from_pretrained(model_path, device_map="auto", max_input_size=2048)
+        model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.float16, device_map="auto")
         LLM.__init__(self, tokenizer=tokenizer, model=model, max_new_tokens=max_new_tokens, query_helper=query_helper)
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
