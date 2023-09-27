@@ -145,18 +145,6 @@ def improved_replace_corefs(document, clusters):
     return "".join(resolved)
 
 
-def fetch_articles(client, max_id, index, bucket="markdown-converged"):
-    bucket = client.bucket(bucket)
-    for i in range(index["standardized"], max_id):
-        file_name = "%s.json" % i
-        with bucket.blob(file_name).open("r") as fp:
-            try:
-                article_dict = json.load(fp)
-                yield i, article_dict
-            except:
-                continue
-
-
 def window_sentences(sentences, idx, pre=5, sep="\n\n"):
     start_idx = max(0, idx - pre)
     context = " ".join(sentences[start_idx:idx])
