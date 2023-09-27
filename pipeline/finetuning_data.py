@@ -33,6 +33,8 @@ if __name__ == "__main__":
     amounts, generator = fetch_articles(config.FINE_TUNE_SRC_BUCKET)
     with tqdm(total=amounts) as progress:
         for id_num, d in generator():
+            if d["summary"].strip() == "":
+                continue
             articles.append(d)
             cur_max = max(id_num, cur_max)
             progress.update(1)
