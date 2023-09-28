@@ -35,7 +35,6 @@ if __name__ == "__main__":
     amounts, generator = fetch_articles(config.FINE_TUNE_SRC_BUCKET)
     target_url = "gs://{bucket}/{pattern}".format(bucket=config.FINE_TUNE_TARGET_BUCKET,
                                                   pattern=config.FINE_TUNE_FILE_PATTERN)
-    target_url = target_url.format(id=cur_max)
     with tqdm(total=amounts) as progress:
         for _, d in generator():
             try:
@@ -51,6 +50,7 @@ if __name__ == "__main__":
             finally:
                 progress.update(1)
 
+    target_url = target_url.format(id=cur_max)
     df = pd.DataFrame(articles)
     print(df.head())
     print("Uploading article snapshots")
