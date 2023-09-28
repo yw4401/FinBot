@@ -38,14 +38,18 @@ if __name__ == "__main__":
     target_url = target_url.format(id=cur_max)
     with tqdm(total=amounts) as progress:
         for _, d in generator():
-            if sample and counter > sample:
-                continue
-            if d["summary"].strip() == "":
-                continue
-            articles.append(d)
-            cur_max = max(int(d["id"]), cur_max)
-            progress.update(1)
-            counter += 1
+            try:
+                if sample and counter > sample:
+                    continue
+                if d["summary"].strip() == "":
+                    continue
+                articles.append(d)
+                cur_max = max(int(d["id"]), cur_max)
+                counter += 1
+            except:
+                pass
+            finally:
+                progress.update(1)
 
     df = pd.DataFrame(articles)
     print(df.head())
