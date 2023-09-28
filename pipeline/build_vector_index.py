@@ -2,7 +2,7 @@ import os
 import shutil
 from multiprocessing import Pool
 from multiprocessing import cpu_count
-from multiprocessing import set_start_method
+from common import StarFunc
 import os
 from pathlib import Path
 
@@ -51,16 +51,6 @@ def prepare_articles(article_df, temp_path):
             with open(doc_path, "w") as fp:
                 fp.write(topic_article_df["body"].iloc[i])
     return topics
-
-
-class StarFunc:
-
-    def __init__(self, func):
-        self.func = func
-
-    def __call__(self, args):
-        result = self.func(*args)
-        return result
 
 
 def build_articles_index(year, month):

@@ -2,6 +2,16 @@ from google.cloud import storage
 import config
 
 
+class StarFunc:
+
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, args):
+        result = self.func(*args)
+        return result
+
+
 def upload_blob(bucket_name, source_file_name, destination_blob_name, generation=0):
     """Uploads a file to the bucket."""
     # The ID of your GCS bucket

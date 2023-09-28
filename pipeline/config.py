@@ -14,6 +14,7 @@ ARTICLE_CONVERT_NYT_DATE = "%Y-%m-%dT%H:%M:%S%z"
 FINE_TUNE_SRC_BUCKET = ARTICLE_TARGET_BUCKET
 FINE_TUNE_TARGET_BUCKET = "scraped-news-article-data-null"
 FINE_TUNE_FILE_PATTERN = "fine-tune-summary-{id}.parquet"
+FINE_TUNE_FILE_CHUNK = 64
 
 # Co-reference Resolution
 ARTICLE_COREF_IDX = "coref-index.json"
