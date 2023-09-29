@@ -6,7 +6,7 @@ import pandas as pd
 from datasets import Dataset, DatasetDict
 from evaluate import load
 from transformers import AutoTokenizer
-from transformers import Seq2SeqTrainingArguments, DataCollatorForSeq2Seq, AutoModelForSeq2SeqLM
+from transformers import Seq2SeqTrainingArguments, DataCollatorForSeq2Seq, AutoModelForSeq2SeqLM, AutoConfig
 from transformers import Seq2SeqTrainer
 from peft import get_peft_config, PeftModel, PeftConfig, get_peft_model, LoraConfig, TaskType
 
@@ -59,10 +59,17 @@ if __name__ == "__main__":
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
     sample_df["summary"] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
-    train_df = sample_df.iloc[:21125]
-    eval_df = sample_df.iloc[21125:]
+    
+    train_prop = 0.7
+    eval_prop = 0.5
+    train_idx = round(len(sample_df.index) * train_prop)
+    eval_idx = train_idx + round(((1 - train_prop) * eval_prop) * len(sample_df.index))
+    train_df = sample_df.iloc[:train_idx]
+    eval_df = sample_df.iloc[train_idx:eval_idx]
+    test_df = sample_df.iloc[eval_idx:]
+    del sample_df
 
-    model_checkpoint = "google/flan-t5-base"
+    model_checkpoint = "google/flan-t5-xl"
     train_data = Dataset.from_pandas(train_df[["body", "summary", "summary_type"]])
     eval_data = Dataset.from_pandas(eval_df[["body", "summary", "summary_type"]])
     raw_datasets = DatasetDict({
@@ -70,18 +77,19 @@ if __name__ == "__main__":
         "eval": eval_data
     })
 
-    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=1024)
     prefix_bullets = "summarize in bullet points: "
     prefix_plain = "summarize as paragraph: "
-    max_input_length = 2048
-    max_target_length = 512
+    max_input_length = tokenizer.model_max_length
+    max_target_length = 256
     tokenized_datasets = raw_datasets.map(lambda r: preprocess_function(r, max_input_length, max_target_length),
                                           batched=True)
+    print(f"Truncating to {max_input_length}")
 
     model_name = "t5"
     BATCH_TRAIN = 2
     BATCH_EVAL = 4
-    GRADIENT_STEP = 1
+    GRADIENT_STEP = 4
     LEARNING_RATE = 2e-5
     EPOCHS = 4
     LAMBDA = 0.01
@@ -91,22 +99,26 @@ if __name__ == "__main__":
         learning_rate=LEARNING_RATE,
         per_device_train_batch_size=BATCH_TRAIN,
         per_device_eval_batch_size=BATCH_EVAL,
+        gradient_accumulation_steps=GRADIENT_STEP,
+        gradient_checkpointing=True,
         weight_decay=LAMBDA,
         num_train_epochs=EPOCHS,
         predict_with_generate=True,
         evaluation_strategy="epoch",
         save_strategy="epoch",
+        deepspeed="deepsp.json",
         load_best_model_at_end=True,
-        bf16=True,
+        fp16=False,
         seed=93
     )
     peft_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=16, lora_alpha=16, lora_dropout=0.05, bias="none",
+        task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=8, lora_alpha=8, lora_dropout=0.05, bias="none",
         target_modules=["q", "v"],
     )
-
     model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint)
+    model.enable_input_require_grads()
     model = get_peft_model(model, peft_config)
+    model.config.use_cache = False
     data_collator = DataCollatorForSeq2Seq(tokenizer, model=model)
     model.print_trainable_parameters()
 
