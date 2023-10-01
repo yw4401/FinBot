@@ -54,7 +54,7 @@ def compute_metrics(eval_pred):
     return {k: round(v, 4) for k, v in result.items()}
 
 
-if __name__ == "__main__":
+def get_data_sets_df(location):
     sample_df = pd.read_parquet("gs://scraped-news-article-data-null/fine-tune-summary--1.parquet")
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
@@ -64,11 +64,16 @@ if __name__ == "__main__":
     eval_prop = 0.5
     train_idx = round(len(sample_df.index) * train_prop)
     eval_idx = train_idx + round(((1 - train_prop) * eval_prop) * len(sample_df.index))
+    # train_idx = 256
+    # eval_idx = 512
     train_df = sample_df.iloc[:train_idx]
     eval_df = sample_df.iloc[train_idx:eval_idx]
     test_df = sample_df.iloc[eval_idx:]
-    del sample_df
+    return train_df, eval_df, test_df
 
+
+if __name__ == "__main__":
+    train_df, eval_df, test_df = get_data_sets_df("gs://scraped-news-article-data-null/fine-tune-summary--1.parquet")
     model_checkpoint = "google/flan-t5-xl"
     train_data = Dataset.from_pandas(train_df[["body", "summary", "summary_type"]])
     eval_data = Dataset.from_pandas(eval_df[["body", "summary", "summary_type"]])
@@ -87,9 +92,9 @@ if __name__ == "__main__":
     print(f"Truncating to {max_input_length}")
 
     model_name = "t5"
-    BATCH_TRAIN = 2
-    BATCH_EVAL = 4
-    GRADIENT_STEP = 4
+    BATCH_TRAIN = 3
+    BATCH_EVAL = 16
+    GRADIENT_STEP = 3
     LEARNING_RATE = 2e-5
     EPOCHS = 4
     LAMBDA = 0.01
@@ -136,7 +141,7 @@ if __name__ == "__main__":
         results = trainer.train(resume_from_checkpoint=True)
     except ValueError as e:
         results = trainer.train(resume_from_checkpoint=False)
-
+        
     trainer.save_model()
 
 
