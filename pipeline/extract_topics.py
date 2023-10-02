@@ -34,8 +34,8 @@ if __name__ == "__main__":
     year = 2023
     month = 4
 
-    src_url = "gs://{bucket}/{file}".format(bucket=config.ARTICLE_COREF_SUBSAMPLE_TARGET,
-                                            file=config.ARTICLE_COREF_SUBSAMPLE_FILE)
+    src_url = "gs://{bucket}/{file}".format(bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
+                                            file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
     src_df = pd.read_parquet(src_url.format(year=year, month=month))
     topics, prob = topic_model.fit_transform(src_df.body)
     src_df["topic"] = topics

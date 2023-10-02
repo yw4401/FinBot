@@ -2,34 +2,48 @@ import pandas as pd
 from google.cloud import storage
 from datetime import datetime
 import config
-from pandarallel import pandarallel
 from contextlib import closing
+from multiprocessing import cpu_count
 import json
+import os
+import multiprocessing as mp
+import numpy as np
+from tqdm import tqdm
 
 
-pandarallel.initialize(progress_bar=True)
+class FilterArticle:
 
+    def __init__(self, filter_f, source):
+        self.filter_f = filter_f
+        self.source = source
 
-def get_work(source=config.ARTICLE_COREF_TARGET_BUCKET, filter_f=lambda article: True):
-    with closing(storage.Client(project=config.GCP_PROJECT)) as client:
-        tbd = set([f.name for f in client.list_blobs(bucket_or_name=source)])
-        tbd_df = pd.DataFrame({
-            "tbd": list(tbd)
-        })
-
-    def filter_article(f_name):
+    def __call__(self, pair):
+        position, chunk = pair
+        results = []
         with closing(storage.Client(project=config.GCP_PROJECT)) as client:
-            bucket = client.bucket(source)
-            with bucket.blob(f_name).open("r") as fp:
-                article = json.load(fp)
-                if filter_f(article):
-                    return article
-        return ""
+            bucket = client.bucket(self.source)
+            with tqdm(chunk, total=len(chunk), position=position) as progress:
+                for f_name in progress:
+                    with bucket.blob(f_name).open("r") as fp:
+                        article = json.load(fp)
+                        if self.filter_f(article):
+                            results.append(article)
+        return results
 
-    tbd_df["result"] = tbd_df.tbd.parallel_apply(filter_article)
-    tbd_df_filtered = tbd_df.loc[tbd_df["result"].str.len() > 0]
 
-    return tbd_df_filtered.result.to_list()
+def get_work(source=config.ARTICLE_TARGET_BUCKET, filter_f=lambda article: True):
+    with closing(storage.Client(project=config.GCP_PROJECT)) as client:
+        tbd = [f.name for f in client.list_blobs(bucket_or_name=source)]
+        workers = cpu_count() - 1
+        tbd_chunks = np.array_split(tbd, workers)
+
+    print("Processing {chuck_size} chunks".format(chuck_size=len(tbd_chunks)))
+    final = []
+    with mp.Pool(processes=workers, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),)) as pool:
+        for result in pool.imap_unordered(FilterArticle(filter_f=filter_f, source=source), enumerate(tbd_chunks)):
+            final.extend(result)
+
+    return final
 
 
 def year_month_filter(article, year, month):
@@ -40,7 +54,11 @@ def year_month_filter(article, year, month):
 if __name__ == "__main__":
     year = 2023
     month = 4
-    sample = get_work(filter_f=lambda a: year_month_filter(article=a, year=2023, month=4))
+
+    def filter_article(article):
+        return year_month_filter(article, year, month)
+
+    sample = get_work(filter_f=filter_article)
     for s in sample:
         if s["source"] == "reuters" and len(s["title"]) < len(s["category"]):
             real_title = s["category"]
@@ -49,6 +67,6 @@ if __name__ == "__main__":
 
     final_df = pd.DataFrame(sample)
 
-    target_url = "gs://{bucket}/{file}".format(bucket=config.ARTICLE_COREF_SUBSAMPLE_TARGET,
-                                               file=config.ARTICLE_COREF_SUBSAMPLE_FILE)
+    target_url = "gs://{bucket}/{file}".format(bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
+                                               file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
     final_df.to_parquet(target_url.format(year=year, month=month), index=False)

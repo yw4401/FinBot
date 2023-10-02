@@ -201,23 +201,27 @@ if __name__ == "__main__":
     spacy.require_cpu()
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
     year = 2023
+    month = 4
 
-    client = storage.Client(project=config.GCP_PROJECT)
-    works = get_coref_work(filter_f=year_filter_generator(year))
-
-    bucket = client.bucket(config.ARTICLE_COREF_TARGET_BUCKET)
-    idx = load_coref_index(client)
-    errors = set(idx["error"])
-
-    with tqdm(total=len(works)) as progress:
-        for f_name, article in works:
+    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
+                                                 file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
+    src_file = src_file.format(year=year, month=month)
+    src_df = pd.read_parquet(src_file)
+    body = []
+    with tqdm(total=len(src_df.index)) as progress:
+        for article in src_df.body:
             corref_body = ""
-            if len(article["body"]) > 0:
-                corref_body = coref_text(article["body"], predictor, nlp)
+            if article and len(article.strip()) > 0:
+                corref_body = coref_text(article, predictor, nlp)
             if corref_body:
-                with bucket.blob(f_name).open("w") as fp:
-                    article["body"] = corref_body
-                    json.dump(fp=fp, obj=article)
+                body.append(corref_body)
             else:
-                errors.add(f_name)
+                body.append("ERROR")
             progress.update(1)
+
+    src_df["body"] = body
+    src_df = src_df.loc[src_df.body != "ERROR"]
+    target_url = "gs://{tgt_bucket}/{file}".format(tgt_bucket=config.ARTICLE_COREF_TARGET_BUCKET,
+                                                   file=config.ARTICLE_COREF_FILE_PATTERN)
+    target_url = target_url.format(year=year, month=month)
+    src_df.to_parquet(target_url, index=False)

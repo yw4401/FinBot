@@ -55,7 +55,7 @@ def compute_metrics(eval_pred):
 
 
 def get_data_sets_df(location):
-    sample_df = pd.read_parquet("gs://scraped-news-article-data-null/fine-tune-summary--1.parquet")
+    sample_df = pd.read_parquet(location)
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
     sample_df["summary"] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
