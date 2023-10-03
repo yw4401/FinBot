@@ -1,7 +1,5 @@
 import gc
-import json
 import re
-from contextlib import closing
 from datetime import datetime
 from typing import List
 
@@ -9,59 +7,11 @@ import pandas as pd
 import spacy
 import torch
 from allennlp.predictors.predictor import Predictor
-from google.cloud import storage
-from pandarallel import pandarallel
 from spacy.tokens import Doc
 from spacy.tokens import Span
 from tqdm import tqdm
 
 import config
-
-pandarallel.initialize(progress_bar=True)
-
-
-def load_coref_index(client, bucket=config.ARTICLE_CONVERT_META_BUCKET, coref_index=config.ARTICLE_COREF_IDX):
-    files = set([f.name for f in client.list_blobs(bucket_or_name=bucket)])
-    if coref_index not in files:
-        return {
-            "error": []
-        }
-    bucket = client.bucket(bucket)
-    with bucket.blob(coref_index).open("r") as fp:
-        index = json.load(fp)
-        if "error" not in index:
-            index["error"] = []
-    return index
-
-
-def get_coref_converted(client, bucket=config.ARTICLE_COREF_TARGET_BUCKET):
-    files = set([f.name for f in client.list_blobs(bucket_or_name=bucket)])
-    return files
-
-
-def get_coref_work(source=config.ARTICLE_COREF_SRC_BUCKET, filter_f=lambda article: True):
-    with closing(storage.Client(project=config.GCP_PROJECT)) as client:
-        errors = set(load_coref_index(client)["error"])
-        done = get_coref_converted(client)
-        tbd = set([f.name for f in client.list_blobs(bucket_or_name=source)])
-        tbd = tbd - done - errors
-        tbd_df = pd.DataFrame({
-            "tbd": list(tbd)
-        })
-
-    def filter_article(f_name):
-        with closing(storage.Client(project=config.GCP_PROJECT)) as client:
-            bucket = client.bucket(source)
-            with bucket.blob(f_name).open("r") as fp:
-                article = json.load(fp)
-                if filter_f(article):
-                    return [f_name, article]
-        return []
-
-    tbd_df["result"] = tbd_df.tbd.parallel_apply(filter_article)
-    tbd_df_filtered = tbd_df.loc[tbd_df["result"].str.len() > 0]
-
-    return tbd_df_filtered.result.to_list()
 
 
 def get_span_noun_indices(doc: Doc, cluster: List[List[int]]):
@@ -187,13 +137,6 @@ def coref_text(article, predictor, nlp):
         gc.collect()
         torch.cuda.empty_cache()
         return None
-
-
-def year_filter_generator(year):
-    def filter(article):
-        timestamp = datetime.fromisoformat(article["published"])
-        return timestamp.year == year
-    return filter
 
 
 if __name__ == "__main__":
