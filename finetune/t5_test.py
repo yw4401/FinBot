@@ -47,11 +47,11 @@ class ListDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     _, _, test_df = get_data_sets_df("gs://scraped-news-article-data-null/fine-tune-summary--1.parquet")
-    model_checkpoint = "./t5-summary"
-    out_file = "test_predicted.parquet"
-    batch = 4
+    model_checkpoint = "google/flan-t5-xl"
+    out_file = "test_predicted_og.parquet"
+    batch = 3
 
-    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=1024)
     max_input_length = tokenizer.model_max_length
     max_target_length = 256
     print(f"Truncating to {max_input_length}")
@@ -59,8 +59,19 @@ if __name__ == "__main__":
     test_body = ListDataset(test_df["body"].tolist())
     print(test_df["body"].head())
     
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, torch_dtype=torch.half, device_map="auto")
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer)
+    local_rank = int(os.getenv("LOCAL_RANK", "0"))
+    world_size = int(os.getenv("WORLD_SIZE", "1"))
+    
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, torch_dtype=torch.half)
+    ds_model = deepspeed.init_inference(
+        model=model,      # Transformers models
+        mp_size=world_size,        # Number of GPU
+        dtype=torch.half, # dtype of the weights (fp16)
+        replace_method="auto", # Lets DS autmatically identify the layer to replace
+        replace_with_kernel_inject=True, # replace the model with the kernel injector
+    )
+    model = ds_model.module
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, device=local_rank)
     results = []
     newline_regex = re.compile(r"\s*\*")
     counter = 0
