@@ -51,6 +51,10 @@ if __name__ == "__main__":
     out_file = "test_predicted_og.parquet"
     batch = 3
 
+    args = Seq2SeqTrainingArguments(
+        deepspeed="deepsp.json",
+        seed=93
+    )
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=1024)
     max_input_length = tokenizer.model_max_length
     max_target_length = 256
