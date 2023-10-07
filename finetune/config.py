@@ -1,6 +1,6 @@
 # AI Assisted Labeling
 LABEL_REINFORCEMENT = "Good. "
-LABEL_MAX_TOKEN = 3072
+LABEL_MAX_TOKEN = 1024 * 12
 LABEL_VERBOSE = False
 LABEL_FORMAT_USER = "Format:\n{raw}"
 LABEL_FORMAT_SYSTEM = "You are an AI assistant that will format user inputs into json.\n{format_instructions}"

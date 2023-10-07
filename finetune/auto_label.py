@@ -27,18 +27,21 @@ class RatingOutput(BaseModel):
 
 class ChromaRatingExampleSelector(BaseExampleSelector):
 
-    def __init__(self, collection, k=1):
+    def __init__(self, collection, low_k=1, high_k=1):
         BaseExampleSelector.__init__(self)
         self.collection = collection
-        self.num_sample = k
+        self.num_low = low_k
+        self.num_high = high_k
 
     def add_example(self, example: Dict[str, str]) -> Any:
         raise NotImplementedError("Read only")
 
     def select_examples(self, input_variables: Dict[str, str]) -> List[dict]:
-        return self._convert_query_result(
-            self.collection.query(query_texts=[input_variables["text"]],
-                                  n_results=self.num_sample))
+        high_result = self.collection.query(query_texts=[input_variables["text"]], where={"classified": "h"},
+                                            n_results=self.num_high)
+        low_result = self.collection.query(query_texts=[input_variables["text"]], where={"classified": "l"},
+                                           n_results=self.num_low)
+        return self._convert_query_result(high_result) + self._convert_query_result(low_result)
 
     def _convert_query_result(self, result) -> List[dict]:
         results = []
@@ -75,7 +78,7 @@ def create_label_examples(examples: Iterable[Dict[str, str]], user_prompt, reinf
     human_template = HumanMessagePromptTemplate.from_template(reinforcement + user_prompt)
     ai_format = "Thought process:\n{thought}\n\nFinal Rating:\n{rating}"
     for e in examples:
-        result.append(human_template.format(context=e["context_text"]))
+        result.append(human_template.format(context=e["context_text"], output=e["output"]))
         result.append(AIMessage(content=ai_format.format(thought=e["thought"], rating=e["rating"])))
     return result
 
@@ -84,8 +87,13 @@ def rate_data_raw(model: BaseChatModel, text: RatableText, system: str, user: st
                   example_selector: BaseExampleSelector = None):
     examples = []
     if example_selector:
-        examples = create_label_examples(example_selector.select_examples({"text": text.context_text}))
+        selected = example_selector.select_examples({"text": text.context_text})
+        examples = create_label_examples(selected[1:],
+                                         user_prompt=user)
+        examples = create_label_examples(selected[:1], user_prompt=user, reinforcement="") + examples
     system_template = SystemMessagePromptTemplate.from_template(system)
+    if len(examples) > 0:
+        user = config.LABEL_REINFORCEMENT + user
     human_template = HumanMessagePromptTemplate.from_template(user)
     prompt = ChatPromptTemplate.from_messages([system_template, *examples,
                                                human_template])
@@ -133,7 +141,7 @@ def format_appropriate_meal(model: BaseChatModel, raw_text: str, examples: Itera
     output_parser = PromptAdoptingParser(base_parser=output_parser, prompt=prompt_val)
     parse_chain = LLMChain(llm=model, prompt=format_prompt, output_parser=output_parser,
                            verbose=config.LABEL_VERBOSE)
-    result = parse_chain(inputs={"raw": raw_text})["text"].dict()
+    result = parse_chain(inputs={"raw": raw_text})["text"].model_dump()
     result["raw"] = raw_text
     return result
 
@@ -148,3 +156,31 @@ def evaluate_text(model: BaseChatModel, texts: RatableText, system: str, user: s
     raw_text = rate_data_raw(model, texts, system, user, meal_selector)
     formatted = format_appropriate_meal(model, raw_text, format_examples)
     return formatted
+
+
+def create_db_entries(records, col):
+    cur_id = col.count()
+    ids = []
+    documents = []
+    classified = []
+    thought = []
+    summary = []
+    ratings = []
+    for idx, r in records.iterrows():
+        documents.append(r["body"])
+        if r["rating"] > 3:
+            classified.append("h")
+        else:
+            classified.append("l")
+        thought.append(r["thought"])
+        ratings.append(r["rating"])
+        summary.append(r["predicted"])
+        ids.append(str(cur_id))
+        cur_id += 1
+
+    return {
+        "documents": documents,
+        "ids": ids,
+        "metadatas": [{"thought": t, "classified": c, "rating": v, "output": w} for t, c, v, w in
+                      zip(thought, classified, ratings, summary)]
+    }
