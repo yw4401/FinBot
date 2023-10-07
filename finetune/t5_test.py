@@ -50,12 +50,14 @@ if __name__ == "__main__":
     model_checkpoint = "google/flan-t5-xl"
     out_file = "test_predicted_og.parquet"
     batch = 3
+    MAX_BODY_TOKEN = 1024
+    MAX_SUMMARY_TOKEN = 128
 
     args = Seq2SeqTrainingArguments(
         deepspeed="deepsp.json",
         seed=93
     )
-    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=1024)
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN)
     max_input_length = tokenizer.model_max_length
     max_target_length = 256
     print(f"Truncating to {max_input_length}")
@@ -75,7 +77,7 @@ if __name__ == "__main__":
         replace_with_kernel_inject=True, # replace the model with the kernel injector
     )
     model = ds_model.module
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, device=local_rank)
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, device=local_rank, max_new_tokens=MAX_SUMMARY_TOKEN)
     results = []
     newline_regex = re.compile(r"\s*\*")
     counter = 0
