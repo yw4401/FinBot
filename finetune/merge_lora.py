@@ -5,11 +5,13 @@ from peft import get_peft_config, PeftModel, PeftConfig, get_peft_model, LoraCon
 
 
 if __name__ == "__main__":
-    model_check = "google/flan-t5-xl"
-    lora_check = "./t5-finetuned-summary"
-    model_out = "t5-summary"
+    model_check = "/workspace/hf/models--google--flan-t5-xxl"
+    lora_check = "./t5-xxl-finetuned-summary/checkpoint-2641"
+    model_out = "t5-summary-xxl"
+    MAX_BODY_TOKEN = 2048
+    
     peft_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=8, lora_alpha=8, lora_dropout=0.05, bias="none",
+        task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=32, lora_alpha=32, lora_dropout=0.05, bias="none",
         target_modules=["q", "v"],
     )
     print("Loading Base Model")
@@ -22,6 +24,6 @@ if __name__ == "__main__":
     print("Saving Merged Model")
     merged_model.save_pretrained(model_out)
     print("Saving Tokenizer")
-    tokenizer = AutoTokenizer.from_pretrained(model_check, model_max_length=1024)
+    tokenizer = AutoTokenizer.from_pretrained(model_check, model_max_length=MAX_BODY_TOKEN)
     tokenizer.save_pretrained(model_out)
     

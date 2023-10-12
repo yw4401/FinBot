@@ -73,21 +73,22 @@ def get_data_sets_df(location):
 
 if __name__ == "__main__":
     model_name = "t5-xxl"
-    model_checkpoint = "google/flan-t5-xxl"
+    cache_dir = "/workspace/hf"
+    model_checkpoint = "/workspace/hf/models--google--flan-t5-xxl"
     generation_checkpoint = model_checkpoint
-    BATCH_TRAIN = 4
-    BATCH_EVAL = 10
-    GRADIENT_STEP = 3
-    LEARNING_RATE = 2e-5
+    BATCH_TRAIN = 8
+    BATCH_EVAL = 16
+    GRADIENT_CHECKPOINT = False
+    GRADIENT_STEP = 2
+    LEARNING_RATE = 5e-4
     EPOCHS = 4
-    LAMBDA = 0.01
-    MAX_BODY_TOKEN = 1024
-    MAX_SUMMARY_TOKEN = 128
+    WARM_UP = 200
+    MAX_BODY_TOKEN = 2048
+    MAX_SUMMARY_TOKEN = 256
     TEMPERATURE = 0
     
-    config = GenerationConfig.from_pretrained(generation_checkpoint)
+    config = GenerationConfig.from_pretrained(generation_checkpoint, cache_dir=cache_dir)
     config.max_new_tokens = MAX_SUMMARY_TOKEN
-#    config.temperature = TEMPERATURE
 
     args = Seq2SeqTrainingArguments(
         f"{model_name}-finetuned-summary",
@@ -95,26 +96,28 @@ if __name__ == "__main__":
         per_device_train_batch_size=BATCH_TRAIN,
         per_device_eval_batch_size=BATCH_EVAL,
         gradient_accumulation_steps=GRADIENT_STEP,
-        gradient_checkpointing=True,
-        weight_decay=LAMBDA,
+        gradient_checkpointing=GRADIENT_CHECKPOINT,
         num_train_epochs=EPOCHS,
+        optim="adafactor",
+        lr_scheduler_type="constant_with_warmup",
+        warmup_steps=WARM_UP,
         predict_with_generate=True,
         evaluation_strategy="epoch",
         save_strategy="epoch",
         deepspeed="deepsp.json",
         load_best_model_at_end=True,
-        fp16=True,
+        bf16=True,
         generation_config=config,
         seed=93
     )
     peft_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=16, lora_alpha=16, lora_dropout=0.05, bias="none",
+        task_type=TaskType.SEQ_2_SEQ_LM, inference_mode=False, r=32, lora_alpha=32, lora_dropout=0.05, bias="none",
         target_modules=["q", "v"],
     )
     
-    train_df, eval_df, test_df = get_data_sets_df("gs://scraped-news-article-data-null/fine-tune-summary--1.parquet")
-    train_df = train_df.sample(200, random_state = 93)
-    eval_df = eval_df.sample(200, random_state = 93)
+    train_df, eval_df, test_df = get_data_sets_df("fine-tune-summary--1.parquet")
+    # train_df = train_df.sample(16, random_state = 93)
+    # eval_df = eval_df.sample(32, random_state = 93)
     print(train_df.head())
     
     train_data = Dataset.from_pandas(train_df[["body", "summary", "summary_type"]])
@@ -124,17 +127,18 @@ if __name__ == "__main__":
         "eval": eval_data
     })
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint).half()
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, cache_dir=cache_dir).half()
     model.generation_config = config
-    model.gradient_checkpointing_enable()
+    if generation_checkpoint:
+        model.gradient_checkpointing_enable()
+        model.config.use_cache = False
     model = get_peft_model(model, peft_config)
-    model.config.use_cache = False
     
-    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN)
+    tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN, cache_dir=cache_dir)
     prefix_bullets = "summarize in bullet points: "
     prefix_plain = "summarize as paragraph: "
     max_input_length = tokenizer.model_max_length
-    max_target_length = 256
+    max_target_length = MAX_SUMMARY_TOKEN
     tokenized_datasets = raw_datasets.map(lambda r: preprocess_function(r, max_input_length, max_target_length),
                                           batched=True)
     print(f"Truncating to {max_input_length}")
@@ -154,7 +158,7 @@ if __name__ == "__main__":
 
     try:
         results = trainer.train(resume_from_checkpoint=True)
-    except ValueError as e:
+    except (ValueError, FileNotFoundError) as e:
         results = trainer.train(resume_from_checkpoint=False)
         
     trainer.save_model()

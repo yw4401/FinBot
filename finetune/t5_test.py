@@ -46,44 +46,30 @@ class ListDataset(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    _, _, test_df = get_data_sets_df("gs://scraped-news-article-data-null/fine-tune-summary--1.parquet")
-    model_checkpoint = "google/flan-t5-xl"
-    out_file = "test_predicted_og.parquet"
-    batch = 3
-    MAX_BODY_TOKEN = 1024
-    MAX_SUMMARY_TOKEN = 128
+    _, _, test_df = get_data_sets_df("fine-tune-summary--1.parquet")
+    model_checkpoint = "/workspace/hf/models--google--flan-t5-xxl"
+    model_name = "flan-t5-xxl"
+    out_file = f"{model_name}-test-predicted.parquet"
+    batch = 8
+    MAX_BODY_TOKEN = 2048
+    MAX_SUMMARY_TOKEN = 256
 
-    args = Seq2SeqTrainingArguments(
-        deepspeed="deepsp.json",
-        seed=93
-    )
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN)
     max_input_length = tokenizer.model_max_length
-    max_target_length = 256
+    max_target_length = MAX_SUMMARY_TOKEN
     print(f"Truncating to {max_input_length}")
     test_df["body"] = test_df.apply(prepend_command, axis=1)
     test_body = ListDataset(test_df["body"].tolist())
     print(test_df["body"].head())
     
-    local_rank = int(os.getenv("LOCAL_RANK", "0"))
-    world_size = int(os.getenv("WORLD_SIZE", "1"))
-    
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, torch_dtype=torch.half)
-    ds_model = deepspeed.init_inference(
-        model=model,      # Transformers models
-        mp_size=world_size,        # Number of GPU
-        dtype=torch.half, # dtype of the weights (fp16)
-        replace_method="auto", # Lets DS autmatically identify the layer to replace
-        replace_with_kernel_inject=True, # replace the model with the kernel injector
-    )
-    model = ds_model.module
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, device=local_rank, max_new_tokens=MAX_SUMMARY_TOKEN)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, device_map="auto", torch_dtype=torch.float16)
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, max_new_tokens=MAX_SUMMARY_TOKEN)
     results = []
     newline_regex = re.compile(r"\s*\*")
     counter = 0
     
     for out in tqdm(summarizer(test_body, batch_size=batch, truncation=True), total=len(test_body)):
-        out = [newline_regex.sub("\n*", o["summary_text"]) for o in out]
+        out = [newline_regex.sub("\n*", o["summary_text"]).strip() for o in out]
         if counter % 100 == 0:
             for o in out:
                 print(o)
