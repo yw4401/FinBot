@@ -8,6 +8,8 @@ from langchain.prompts import HumanMessagePromptTemplate, SystemMessagePromptTem
 from langchain.prompts.example_selector.base import BaseExampleSelector
 from langchain.schema import AIMessage, BaseOutputParser, PromptValue
 from pydantic import BaseModel, Field
+import pandas as pd
+import numpy as np
 
 try:
     import config
@@ -53,6 +55,21 @@ class ChromaRatingExampleSelector(BaseExampleSelector):
                 "thought": metadata["thought"]
             })
         return results
+
+
+class RandomExampleSelector(BaseExampleSelector):
+
+    def __init__(self, examples: List[Dict[str, str]], k=3):
+        self.examples = examples
+        self.k = k
+
+    def add_example(self, example: Dict[str, str]) -> None:
+        """Add new example to store for a key."""
+        self.examples.append(example)
+
+    def select_examples(self, input_variables: Dict[str, str]) -> List[dict]:
+        """Select which examples to use based on the inputs."""
+        return np.random.choice(self.examples, size=self.k, replace=False)
 
 
 class PromptAdoptingParser(BaseOutputParser):
@@ -184,3 +201,15 @@ def create_db_entries(records, col):
         "metadatas": [{"thought": t, "classified": c, "rating": v, "output": w} for t, c, v, w in
                       zip(thought, classified, ratings, summary)]
     }
+
+
+def augment_docs(chain, docs, qrel):
+    cur_doc = docs.doc_id.max() + 1
+    augment_docs = docs.doc_text.progress_apply(lambda x: chain(x)["text"])
+    doc_id_texts = augment_docs.to_frame().reset_index(drop=True)
+    doc_id_texts["orig_id"] = docs.doc_id.tolist()
+    doc_id_texts["new_id"] = cur_doc + doc_id_texts.index
+    doc_qrel_temp = pd.merge(left=doc_id_texts, right=qrel, how="inner", left_on="orig_id", right_on="doc_id")
+    aug_qrel = doc_qrel_temp[["query_id", "new_id", "relevance"]].rename(columns={"new_id": "doc_id"})
+    aug_docs = doc_id_texts[["new_id", "doc_text"]].rename(columns={"new_id": "doc_id"})
+    return aug_docs, aug_qrel
