@@ -40,9 +40,12 @@ def fetch_articles_indices(year, month):
 
 def fetch_topic_sum_index(year, month):
     bucket_fname = config.TOPIC_SUMMARY_INDEX_FILE.format(year=year, month=month)
-    local_fname = Path(config.TOPIC_SUMMARY_INDEX_DIR,
-                       config.TOPIC_SUMMARY_INDEX_PATTERN.format(year=year, month=month))
+    local_fname = Path(config.TOPIC_ARTICLES_INDICES_DIR, bucket_fname)
+    local_dirname = Path(config.TOPIC_ARTICLES_INDICES_DIR,
+                         config.TOPIC_SUMMARY_INDEX_PATTERN.format(year=year, month=month))
     download_blob(config.TOPIC_SUMMARY_INDEX_BUCKET, bucket_fname, local_fname)
+    shutil.unpack_archive(local_fname, local_dirname)
+    os.remove(local_fname)
 
 
 def fetch_year_month(year, month):

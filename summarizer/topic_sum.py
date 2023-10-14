@@ -1,231 +1,119 @@
-import pandas as pd
-import numpy as np
-import random
-import logging
-from datetime import datetime
-import re
-from collections import namedtuple
-from fractions import Fraction
-import openai
-import torch
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_random_exponential,
-)  # for exponential backoff
-import tiktoken
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from abc import ABC
+from typing import Any, List
+
+import chromadb
+from chromadb import API
+from chromadb.api.models.Collection import Collection
+from chromadb.utils import embedding_functions
+from langchain.callbacks.base import Callbacks
+from langchain.callbacks.manager import CallbackManagerForRetrieverRun
+from langchain.chains import RetrievalQA, LLMChain, SimpleSequentialChain
+from langchain.chains.combine_documents.base import BaseCombineDocumentsChain
+from langchain.chains.retrieval_qa.base import BaseRetrievalQA
+from langchain.chat_models import ChatVertexAI
+from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.output_parsers import CommaSeparatedListOutputParser
+from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatMessagePromptTemplate, \
+    ChatPromptTemplate
+from langchain.schema import Document, BaseRetriever
+from langchain.vectorstores import Chroma
+
+try:
+    import config
+except ModuleNotFoundError:
+    import summarizer.config as config
 
 
-clean_summary_regex = re.compile(r"\s+")
+class TopicRetriever(BaseRetriever):
+    client: API
+    collection: str
+    embedding: str
+    k: int = config.TOPIC_K
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
+        chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=self.embedding)
+        topic_col = self.client.get_or_create_collection(name=self.collection,
+                                                         embedding_function=chroma_embed)
+        query_results = topic_col.query(query_texts=[query], n_results=self.k)
+        results = []
+        content_template = "Topic {topic}:\n{doc}"
+        for topic, doc in zip(query_results["ids"][0], query_results["documents"][0]):
+            results.append(Document(page_content=content_template.format(topic=topic, doc=doc)))
+        return results
 
 
-def generate_topic_prompts(summary_df, inquiry, limiter, base_prompt):
-    """
-    This function generates the prompt to be used for filtering the topics. The 
-    goal is again to fit as many topic summaries into the prompt determined by 
-    the limiter function.
-    """
+class ChainRetriever(BaseRetriever):
+    chains: List[BaseRetrievalQA]
 
-    start_idx = 0
-    end_idx = len(summary_df.index)
-
-    row_format = "%d. %s\n"
-    while start_idx < end_idx:
-        prompt = base_prompt % inquiry
-        current_idx = start_idx
-        while limiter(prompt) and current_idx < end_idx:
-            topic_id = summary_df.iloc[current_idx]["topics"]
-            topic_summary = summary_df.iloc[current_idx]["summary"]
-            topic_summary = clean_summary_regex.sub(" ", topic_summary)
-            prompt = prompt + row_format % (topic_id, topic_summary)
-            current_idx = current_idx + 1
-        start_idx = current_idx
-        logging.info("Filtering topics with prompt:\n%s" % prompt)
-        yield prompt
+    def _get_relevant_documents(
+            self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        result = []
+        for chain in self.chains:
+            process_result = chain(query)
+            page_content = process_result["result"]
+            meta_data = {}
+            if "source_documents" in process_result:
+                meta_data["source_documents"] = process_result["source_documents"]
+            result.append(Document(page_content=page_content, metadata=meta_data))
+        return result
 
 
-RelevantTopic = namedtuple("RelevantTopic", "topic_number rating")
-
-get_topics_regex = re.compile(r"(?<=RELEVANT TOPICS:)(\s*(\d+\(\d+\/\d+\)),?)+")
-select_topics_regex = re.compile(r"(?P<topic>\d+)\((?P<rating>\d+\/\d+)\)")
-
-
-def extract_topics(result_text):
-    """
-    A generator that extracts the filtered topic as well as their relevance.
-    """
-
-    topics_segments = get_topics_regex.findall(result_text)
-    for t in topics_segments:
-        part_segments = select_topics_regex.findall(t[0])
-        for p in part_segments:
-            yield (RelevantTopic(p[0], float(Fraction(p[1]))))
+def create_topic_qa_chain(model, vector_db, topic, **kwargs):
+    chroma_embed = SentenceTransformerEmbeddings(model_name=config.TOPIC_EMBEDDING)
+    chroma_langchain = Chroma(client=vector_db, collection_name=config.ARTICLE_COLLECTION,
+                              embedding_function=chroma_embed)
+    chroma_search = {"k": config.ARTICLE_K, "filter": {"topic": topic}}
+    chroma_retriever = chroma_langchain.as_retriever(search_kwargs=chroma_search)
+    article_chain = RetrievalQA.from_chain_type(llm=model, chain_type="map_reduce", retriever=chroma_retriever,
+                                                **kwargs)
+    return article_chain
 
 
-PALM_FILTER_PROMPT = "A numbered list of summaries of topics from news articles is give below. " + \
-                     "Using only information in the summaries, identify the topics from the list that can be further investigated to answer the inquiry below. " + \
-                     "In addition, explain why the topics identified are selected. " + \
-                     'An example of how the answer should be formatted is as follow:\nRELEVANT TOPICS: 1(2/10), 5(6/10), 10(1/10)\nREASON: give the explanation of why the topics are selected.\n' + \
-                     'In the example, the numbers 1, 5, and 10 are the selected topics from the list. (2/10) is the probability that topic 1 is relevant to the inquiry.' + \
-                     '\n\nInquiry: %s\nList of Topics:\n'
-
-selection_regex = re.compile(r"")
-
-
-def create_palm2_filter(prompt=PALM_FILTER_PROMPT, temperature=0.7, max_new_tokens=1024, max_prompt_tokens=1024):
-    cache_dir = "/home/jupyter/models"
-    tokenizer = LlamaTokenizer.from_pretrained("/home/jupyter/koala_transformer", device_map="auto",
-                                               cache_dir=cache_dir, max_input_size=6656)
-    project_id = "msca310019-capstone-f945"
-    model_name = "text-bison@001"
-    location = "us-central1"
-    matcher = re.compile(r"\<SUMMARY\>(?P<summary>.+)\<\/SUMMARY\>")
-
-    """Predict using a Large Language Model."""
-    vertexai.init(project=project_id, location=location)
-    model = TextGenerationModel.from_pretrained(model_name)
-
-    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
-    def predict_large_language_model_sample(
-            temperature: float,
-            max_decode_steps: int,
-            top_p: float,
-            top_k: int,
-            content: str,
-    ):
-
-        response = model.predict(
-            content,
-            temperature=temperature,
-            max_output_tokens=max_decode_steps,
-            top_k=top_k,
-            top_p=top_p)
-        return response
-
-    def token_count_limiter(prompt):
-        tokens = tokenizer(prompt, return_tensors="pt")
-        token_count = tokens["input_ids"].shape[1]
-        return token_count <= max_prompt_tokens
-
-    def filter_topics(topic_df, inquiry):
-
-        for p in generate_topic_prompts(topic_df, inquiry, token_count_limiter, base_prompt=prompt):
-            result = predict_large_language_model_sample(temperature=temperature, max_decode_steps=max_new_tokens,
-                                                         top_p=0.8, top_k=40, content=p)
-            result = str(result)
-            for topic in extract_topics(result):
-                yield topic
-
-    return filter_topics
+def topic_aggregate_chain(model, vector_db, topics, sub_kwargs=None, **kwargs):
+    if sub_kwargs is None:
+        sub_kwargs = {}
+    article_chains = [create_topic_qa_chain(model, vector_db, i,
+                                            return_source_documents=True, **sub_kwargs) for i in topics]
+    article_subretriever = ChainRetriever(chains=article_chains)
+    final_chain = RetrievalQA.from_chain_type(llm=model, chain_type="map_reduce",
+                                              retriever=article_subretriever, **kwargs)
+    return final_chain
 
 
-BASE_FILTER_PROMPT = "A numbered list of summaries of topics from news articles is give below. " + \
-                     "Without using prior knowledge and only focusing on information in the list, identify the topics from the list that can be used to directly answer the inquiry. " + \
-                     'Do not speculate on possible connection between the summaries and the inquiry, such as stating that topic X may be related to the inquiry. Only focus on what is explicitly mentioned in the summaries. ' + \
-                     "In addition, explain in detail why the topics identified are selected, and also provide a counter-argument of why the topics would not be related to the inquiry. " + \
-                     'An example of how the answer should be formatted is as follow:\nREASON: topics 1, 5, 10 are selected because...\nCOUNTER: the counter argument.\nRELEVANT TOPICS: 1(2/10), 5(6/10), 10(1/10)\n' + \
-                     'where 1, 5, and 10 are the selected topics from the list. (2/10) is the probability that topic 1 is relevant to the inquiry. The probability should be based on both the reason and the counter argument.\n\nInquiry: %s\nList of Topics:\n'
+def create_topic_filter(model, vector_db, **kwargs):
+    topic_retriever = RetrievalQA.from_chain_type(llm=model, chain_type="map_reduce",
+                                                  retriever=vector_db,
+                                                  **kwargs)
+    format_system = SystemMessagePromptTemplate.from_template(config.TOPIC_FILTER_FORMAT_SYSTEM)
+    format_user = HumanMessagePromptTemplate.from_template(config.TOPIC_FILTER_FORMAT_USER)
+    format_chat = ChatPromptTemplate.from_messages([format_system, format_user])
+    output_parser = CommaSeparatedListOutputParser()
+    format_chat = format_chat.partial(format_instructions=output_parser.get_format_instructions())
+    topic_parser = LLMChain(llm=model, prompt=format_chat, output_parser=output_parser)
+    overall_chain = SimpleSequentialChain(chains=[topic_retriever, topic_parser], verbose=True)
+
+    def filter_func(question):
+        input_question = config.TOPIC_FILTER_RAW_TEMPLATE.format(question=question)
+        return [int(t) for t in overall_chain(input_question)["output"]]
+
+    return filter_func
 
 
-def create_openai_filter(api_key, prompt=BASE_FILTER_PROMPT, temperature=0.7, max_new_tokens=1024,
-                         max_prompt_tokens=2560):
-    openai.api_key = api_key
-    engine = "gpt-3.5-turbo"
-    encoding = tiktoken.encoding_for_model(engine)
-    matcher = re.compile(r"SUMMARY:(?P<summary>(.|\n)+)EXPLANATION")
+if __name__ == "__main__":
+    chroma = chromadb.PersistentClient(path="topics/topic_indices/topic-2023-4")
+    chroma_articles = chromadb.PersistentClient(path="topics/topic_indices/articles-2023-4")
+    topic_retriever = TopicRetriever(client=chroma, collection=config.TOPIC_COLLECTION,
+                                     embedding=config.TOPIC_EMBEDDING)
 
-    @retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
-    def completion_with_backoff(**kwargs):
-        return openai.ChatCompletion.create(**kwargs)
-
-    def token_count_limiter(prompt):
-        tokens = encoding.encode(prompt)
-        return len(tokens) <= max_prompt_tokens
-
-    def filter_topics(topic_df, inquiry):
-
-        for p in generate_topic_prompts(topic_df, inquiry, token_count_limiter, base_prompt=prompt):
-            messages = [
-                {'role': 'user', 'content': p},
-            ]
-            result = completion_with_backoff(messages=messages, model=engine, temperature=temperature,
-                                             max_tokens=max_new_tokens)
-            result_text = result['choices'][0]['message']['content']
-            logging.info("Raw OpenAI filter response:\n%s" % result_text)
-            for topic in extract_topics(result_text):
-                yield topic
-
-    return filter_topics
-
-
-def create_koala_filter(prompt=BASE_FILTER_PROMPT, temperature=0.7, max_new_tokens=512, max_prompt_tokens=1536):
-    cache_dir = "/home/jupyter/models"
-    tokenizer = LlamaTokenizer.from_pretrained("/home/jupyter/koala_transformer", device_map="auto",
-                                               cache_dir=cache_dir, max_input_size=2048)
-    model = LlamaForCausalLM.from_pretrained("/home/jupyter/koala_transformer", torch_dtype=torch.float16,
-                                             low_cpu_mem_usage=True, device_map="auto", cache_dir=cache_dir)
-
-    def generate_koala_prompt(prompt):
-        system = """BEGINNING OF CONVERSATION: """
-        template = system + "USER: %s GPT:"
-        return template % prompt
-
-    def generate_from_tokens(tokens):
-        outputs = model.generate(**tokens,
-                                 do_sample=True,
-                                 top_p=1.0,
-                                 temperature=temperature,
-                                 max_new_tokens=max_new_tokens)
-        result = tokenizer.decode(outputs[0][tokens["input_ids"].shape[1]:], skip_special_tokens=True)
-        return "".join(result)
-
-    def token_count_limiter(final_prompt):
-        final_prompt = generate_koala_prompt(final_prompt)
-        tokens = tokenizer(final_prompt, return_tensors="pt")
-        token_count = tokens["input_ids"].shape[1]
-        return token_count <= max_prompt_tokens
-
-    def filter_topics(topic_df, inquiry):
-        for p in generate_topic_prompts(topic_df, inquiry, token_count_limiter, base_prompt=prompt):
-            final_prompt = generate_koala_prompt(p)
-            tokens = tokenizer(final_prompt, return_tensors="pt").to("cuda")
-            print(generate_from_tokens(tokens))
-
-    return filter_topics
-
-
-def create_topic_filter(kind="openai", **kwargs):
-    """
-    Creates a filter function that takes a dataframe with a column 
-    of topic IDs "topics" and a column of summaries "summary", 
-    and returns an iterable of RelevantTopic
-    """
-
-    if kind == "koala":
-        # Note the Koala one doesn't work rn
-        import torch
-        from transformers import LlamaForCausalLM, LlamaTokenizer
-        return create_koala_filter(**kwargs)
-    if kind == "vertex-ai":
-        import vertexai
-        from vertexai.preview.language_models import TextGenerationModel
-        return create_palm2_filter(**kwargs)
-    if kind == "openai":
-        return create_openai_filter(**kwargs)
-    raise ValueError("Invalid kind: " + kind)
-
-
-def load_faiss_topic_filter(path, embed_model):
-    import faiss
-    index = faiss.read_index(path)
-
-    def filter_topic(query, init_df, k=50):
-        vector_query = np.array(embed_model.get_query_embedding(query))
-        vector_query = np.reshape(vector_query, (1, len(vector_query)))
-        vector_query = vector_query.astype("float32")
-        D, I = index.search(vector_query, k=k)
-        logging.info("Semantic Index found topics: " + str(I))
-        return init_df.loc[init_df.topics.isin(I[0])]
-
-    return filter_topic
+    plan_llm = ChatVertexAI(
+        temperature=0,
+        model_name="chat-bison",
+        max_output_tokens=512,
+        verbose=True
+    )
+    query = "Which companies are developing drugs that are currently in the process of approval?"
+    filter_chain = create_topic_filter(plan_llm, topic_retriever, verbose=True)
+    topics = filter_chain(query)
+    agg_chain = topic_aggregate_chain(plan_llm, chroma_articles, topics, return_source_documents=True)
+    print(agg_chain(query))
