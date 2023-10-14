@@ -60,6 +60,8 @@ def get_data_sets_df(location):
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
     sample_df["summary"] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
+    sample_df["summary"] = sample_df.title.str.strip() + "\n" + sample_df.summary
+    sample_df["summary"] = sample_df.summary.str.strip()
     
     train_prop = 0.7
     eval_prop = 0.5
@@ -73,22 +75,19 @@ def get_data_sets_df(location):
 
 if __name__ == "__main__":
     model_name = "t5-xxl"
-    cache_dir = "/workspace/hf"
-    model_checkpoint = "/workspace/hf/models--google--flan-t5-xxl"
+    cache_dir = "~/transformers"
+    model_checkpoint = "../../flan-t5-xxl"
     generation_checkpoint = model_checkpoint
-    BATCH_TRAIN = 8
-    BATCH_EVAL = 16
+    BATCH_TRAIN = 2
+    BATCH_EVAL = 4
     GRADIENT_CHECKPOINT = False
-    GRADIENT_STEP = 2
-    LEARNING_RATE = 5e-4
+    GRADIENT_STEP = 1
+    LEARNING_RATE = 1e-3
     EPOCHS = 4
     WARM_UP = 200
     MAX_BODY_TOKEN = 2048
     MAX_SUMMARY_TOKEN = 256
     TEMPERATURE = 0
-    
-    config = GenerationConfig.from_pretrained(generation_checkpoint, cache_dir=cache_dir)
-    config.max_new_tokens = MAX_SUMMARY_TOKEN
 
     args = Seq2SeqTrainingArguments(
         f"{model_name}-finetuned-summary",
@@ -102,12 +101,9 @@ if __name__ == "__main__":
         lr_scheduler_type="constant_with_warmup",
         warmup_steps=WARM_UP,
         predict_with_generate=True,
-        evaluation_strategy="epoch",
         save_strategy="epoch",
         deepspeed="deepsp.json",
-        load_best_model_at_end=True,
         bf16=True,
-        generation_config=config,
         seed=93
     )
     peft_config = LoraConfig(
@@ -116,19 +112,21 @@ if __name__ == "__main__":
     )
     
     train_df, eval_df, test_df = get_data_sets_df("fine-tune-summary--1.parquet")
-    # train_df = train_df.sample(16, random_state = 93)
-    # eval_df = eval_df.sample(32, random_state = 93)
+    train_df = pd.concat([train_df, eval_df], ignore_index=True)
+    # train_df = train_df.sample(32, random_state = 93)
     print(train_df.head())
+    print(train_df.summary.iloc[0])
     
     train_data = Dataset.from_pandas(train_df[["body", "summary", "summary_type"]])
-    eval_data = Dataset.from_pandas(eval_df[["body", "summary", "summary_type"]])
     raw_datasets = DatasetDict({
-        "train": train_data,
-        "eval": eval_data
+        "train": train_data
     })
 
     model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, cache_dir=cache_dir).half()
+    config = GenerationConfig.from_pretrained(generation_checkpoint, cache_dir=cache_dir)
+    config.max_new_tokens = MAX_SUMMARY_TOKEN
     model.generation_config = config
+    args.generation_config = config
     if generation_checkpoint:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
@@ -150,7 +148,6 @@ if __name__ == "__main__":
         model,
         args,
         train_dataset=tokenized_datasets["train"],
-        eval_dataset=tokenized_datasets["eval"],
         data_collator=data_collator,
         tokenizer=tokenizer,
         compute_metrics=compute_metrics

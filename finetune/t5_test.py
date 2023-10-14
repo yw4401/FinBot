@@ -47,8 +47,8 @@ class ListDataset(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     _, _, test_df = get_data_sets_df("fine-tune-summary--1.parquet")
-    model_checkpoint = "/workspace/hf/models--google--flan-t5-xxl"
-    model_name = "flan-t5-xxl"
+    model_checkpoint = "./t5-summary-xxl"
+    model_name = "summary-t5-xxl"
     out_file = f"{model_name}-test-predicted.parquet"
     batch = 8
     MAX_BODY_TOKEN = 2048

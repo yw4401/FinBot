@@ -5,8 +5,8 @@ from peft import get_peft_config, PeftModel, PeftConfig, get_peft_model, LoraCon
 
 
 if __name__ == "__main__":
-    model_check = "/workspace/hf/models--google--flan-t5-xxl"
-    lora_check = "./t5-xxl-finetuned-summary/checkpoint-2641"
+    model_check = "../../flan-t5-xxl"
+    lora_check = "./t5-xxl-finetuned-summary"
     model_out = "t5-summary-xxl"
     MAX_BODY_TOKEN = 2048
     
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     model = AutoModelForSeq2SeqLM.from_pretrained(model_check)
     print("Loading LORA")
     model = get_peft_model(model, peft_config)
-    peft_model = load_state_dict_from_zero_checkpoint(model, lora_check).to("cuda")
+    peft_model = load_state_dict_from_zero_checkpoint(model, lora_check)
     print("Merging Model")
     merged_model = peft_model.merge_and_unload()
     print("Saving Merged Model")
