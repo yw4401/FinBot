@@ -44,6 +44,11 @@ TOPIC_SUM_MODEL_PARAMS = {
 TOPIC_SUM_TARGET = "scraped-news-article-data-null"
 TOPIC_SUM_TARGET_FILE = "topicsum-{year}-{month}.parquet"
 
+# NER
+NER_SPACY_MOD = "en_core_web_md"
+NER_TARGET_BUCKET = ARTICLE_COREF_TARGET_BUCKET
+NER_TARGET_PATTERN = "ner-{year}-{month}.parquet"
+
 # FAISS Articles
 ARTICLE_FAISS_TEMP_DIRECTORY = "./article_db"
 ARTICLE_FAISS_EMBEDDING = "thenlper/gte-base"
