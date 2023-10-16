@@ -11,11 +11,11 @@ ARTICLE_CONVERT_REUTER_DATE = "%B %d, %Y %I:%M %p"
 ARTICLE_CONVERT_NYT_DATE = "%Y-%m-%dT%H:%M:%S%z"
 ARTICLE_CONVERT_SUBSAMPLE_TARGET = "scraped-news-article-data-null"
 ARTICLE_CONVERT_SUBSAMPLE_FILE = "subsample-{year}-{month}.parquet"
+ARTICLE_CONVERT_SUBSAMPLE_IDX = "scraper-subsample.json"
 
 # Fine-tuning Ingestion
-FINE_TUNE_SRC_BUCKET = ARTICLE_TARGET_BUCKET
 FINE_TUNE_TARGET_BUCKET = "scraped-news-article-data-null"
-FINE_TUNE_FILE_PATTERN = "fine-tune-summary-{id}.parquet"
+FINE_TUNE_FILE_PATTERN = "fine-tune-summary-{split}.parquet"
 FINE_TUNE_FILE_CHUNK = 64
 
 # Co-reference Resolution

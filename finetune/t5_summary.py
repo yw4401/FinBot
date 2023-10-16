@@ -13,16 +13,7 @@ from peft import get_peft_config, PeftModel, PeftConfig, get_peft_model, LoraCon
 
 
 def preprocess_function(examples, max_input_length, max_target_length):
-    inputs = []
-    for body, type in zip(examples["body"], examples["summary_type"]):
-        if type == "BULLETS":
-            inputs.append(prefix_bullets + body)
-        elif type == "PLAIN":
-            inputs.append(prefix_plain + body)
-        else:
-            raise ValueError("typo")
-
-    model_inputs = tokenizer(inputs, max_length=max_input_length, truncation=True)
+    model_inputs = tokenizer(examples["body"], max_length=max_input_length, truncation=True)
     labels = tokenizer(text_target=examples["summary"], max_length=max_target_length, truncation=True)
     model_inputs["labels"] = labels["input_ids"]
 
@@ -53,24 +44,6 @@ def compute_metrics(eval_pred):
     result["gen_len"] = np.mean(prediction_lens)
 
     return {k: round(v, 4) for k, v in result.items()}
-
-
-def get_data_sets_df(location):
-    sample_df = pd.read_parquet(location)
-    sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
-    clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
-    sample_df["summary"] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
-    sample_df["summary"] = sample_df.title.str.strip() + "\n" + sample_df.summary
-    sample_df["summary"] = sample_df.summary.str.strip()
-    
-    train_prop = 0.7
-    eval_prop = 0.5
-    train_idx = round(len(sample_df.index) * train_prop)
-    eval_idx = train_idx + round(((1 - train_prop) * eval_prop) * len(sample_df.index))
-    train_df = sample_df.iloc[:train_idx]
-    eval_df = sample_df.iloc[train_idx:eval_idx]
-    test_df = sample_df.iloc[eval_idx:]
-    return train_df, eval_df, test_df
 
 
 if __name__ == "__main__":
@@ -111,13 +84,11 @@ if __name__ == "__main__":
         target_modules=["q", "v"],
     )
     
-    train_df, eval_df, test_df = get_data_sets_df("fine-tune-summary--1.parquet")
-    train_df = pd.concat([train_df, eval_df], ignore_index=True)
-    # train_df = train_df.sample(32, random_state = 93)
+    train_df = pd.read_parquet("fine-tune-summary-train.parquet")
     print(train_df.head())
     print(train_df.summary.iloc[0])
     
-    train_data = Dataset.from_pandas(train_df[["body", "summary", "summary_type"]])
+    train_data = Dataset.from_pandas(train_df[["body", "summary"]])
     raw_datasets = DatasetDict({
         "train": train_data
     })
