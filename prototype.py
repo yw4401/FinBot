@@ -1,15 +1,8 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, List, Mapping, Any
-
-import pandas as pd
 import streamlit as st
-import torch
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from langchain.llms.base import LLM
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizer, PreTrainedModel
+from summarizer.ner import *
 
 from summarizer.topic_sum import *
 import summarizer.config
@@ -59,6 +52,9 @@ with left_column:
 
 with right_column:
     if inquiry_submitted and query.strip() != "":
+        company = extract_company_ticker("")
+        # Do whatever you need for API etc
+        st.write(company)
         with st.spinner('Finding Relevant Topic...'):
             topics = filter_chain(query)
 
