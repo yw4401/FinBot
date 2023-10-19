@@ -5,9 +5,9 @@ from peft import get_peft_config, PeftModel, PeftConfig, get_peft_model, LoraCon
 
 
 if __name__ == "__main__":
-    model_check = "../../flan-t5-xxl"
-    lora_check = "./t5-xxl-finetuned-summary"
-    model_out = "t5-summary-xxl"
+    model_check = "./flan-t5-xl"
+    lora_check = "./t5-xl-finetuned-summary/checkpoint-4276"
+    model_out = "t5-summary-xl"
     MAX_BODY_TOKEN = 2048
     
     peft_config = LoraConfig(

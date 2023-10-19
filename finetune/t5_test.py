@@ -36,7 +36,7 @@ if __name__ == "__main__":
     model_checkpoint = "./t5-summary-xl"
     model_name = "summary-t5-xl"
     out_file = f"{model_name}-test-predicted.parquet"
-    batch = 8
+    batch = 12
     MAX_BODY_TOKEN = 2048
     MAX_SUMMARY_TOKEN = 256
     DTYPE = torch.float16
@@ -49,11 +49,12 @@ if __name__ == "__main__":
     print(test_df["body"].head())
     
     model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, torch_dtype=DTYPE)
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, max_new_tokens=MAX_SUMMARY_TOKEN)
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, max_new_tokens=MAX_SUMMARY_TOKEN, device=local_rank)
     summarizer.model = deepspeed.init_inference(
         summarizer.model,
         mp_size=world_size,
         dtype=DTYPE,
+        max_tokens=MAX_BODY_TOKEN,
         injection_policy={T5Block: ('SelfAttention.o', 'EncDecAttention.o', 'DenseReluDense.wo')}
     )
 
