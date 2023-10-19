@@ -48,7 +48,7 @@ def compute_metrics(eval_pred):
 
 if __name__ == "__main__":
     model_name = "t5-xxl"
-    cache_dir = "~/transformers"
+    cache_dir = "./transformers"
     model_checkpoint = "../../flan-t5-xxl"
     generation_checkpoint = model_checkpoint
     BATCH_TRAIN = 2
@@ -62,6 +62,8 @@ if __name__ == "__main__":
     MAX_SUMMARY_TOKEN = 256
     TEMPERATURE = 0
 
+    config = GenerationConfig.from_pretrained(generation_checkpoint, cache_dir=cache_dir)
+    config.max_new_tokens = MAX_SUMMARY_TOKEN
     args = Seq2SeqTrainingArguments(
         f"{model_name}-finetuned-summary",
         learning_rate=LEARNING_RATE,
@@ -77,6 +79,7 @@ if __name__ == "__main__":
         save_strategy="epoch",
         deepspeed="deepsp.json",
         bf16=True,
+        generation_config=config,
         seed=93
     )
     peft_config = LoraConfig(
@@ -94,18 +97,13 @@ if __name__ == "__main__":
     })
 
     model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, cache_dir=cache_dir).half()
-    config = GenerationConfig.from_pretrained(generation_checkpoint, cache_dir=cache_dir)
-    config.max_new_tokens = MAX_SUMMARY_TOKEN
     model.generation_config = config
-    args.generation_config = config
     if generation_checkpoint:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
     model = get_peft_model(model, peft_config)
     
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN, cache_dir=cache_dir)
-    prefix_bullets = "summarize in bullet points: "
-    prefix_plain = "summarize as paragraph: "
     max_input_length = tokenizer.model_max_length
     max_target_length = MAX_SUMMARY_TOKEN
     tokenized_datasets = raw_datasets.map(lambda r: preprocess_function(r, max_input_length, max_target_length),

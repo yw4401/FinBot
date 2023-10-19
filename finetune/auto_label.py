@@ -2,8 +2,9 @@ import json
 from typing import Dict, Any, List, Iterable
 
 from langchain.chains import LLMChain
+from langchain.chat_models import ChatVertexAI
 from langchain.chat_models.base import BaseChatModel
-from langchain.output_parsers import RetryWithErrorOutputParser, PydanticOutputParser
+from langchain.output_parsers import RetryWithErrorOutputParser, PydanticOutputParser, RegexParser
 from langchain.prompts import HumanMessagePromptTemplate, SystemMessagePromptTemplate, ChatPromptTemplate
 from langchain.prompts.example_selector.base import BaseExampleSelector
 from langchain.schema import AIMessage, BaseOutputParser, PromptValue
