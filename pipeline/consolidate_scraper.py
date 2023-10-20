@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import sys
 from contextlib import closing
 from collections import namedtuple
 from datetime import datetime
@@ -200,6 +201,7 @@ def convert(file_name, target_fname, source_bucket, target_bucket_name, project,
             output = {
                 "source": target,
                 "id": i,
+                "url": source_obj["url"],
                 "category": article.category,
                 "title": article.title,
                 "published": article.published.isoformat(),
@@ -226,7 +228,7 @@ def convert_raw_data(project, target, target_bucket_name, counter, start_id, chu
             counter = counter + 1
 
     logging.info("Submitting %s jobs to process entries" % len(jobs))
-    with Pool(cpu_count()) as pool:
+    with Pool(cpu_count() - 1) as pool:
         for _ in pool.starmap(convert, jobs, chunksize=chunks):
             pass
 
@@ -239,6 +241,8 @@ if __name__ == "__main__":
     log_client = google.cloud.logging.Client(project=config.GCP_PROJECT)
     log_client.setup_logging()
     logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
     with closing(storage.Client(project=config.GCP_PROJECT)) as client:
         conversion_idx = load_conversion_index(client)
         counter = conversion_idx["standardized"]

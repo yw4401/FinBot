@@ -100,7 +100,7 @@ if __name__ == "__main__":
             final_df = pd.concat([old_df, new_df], ignore_index=True).reset_index(drop=True)
         except FileNotFoundError:
             final_df = new_df
-        final_df = final_df.drop_duplicates(subset=["id"])
+        final_df = final_df.drop_duplicates(subset=["url"])
         final_df.to_parquet(target_url, index=False)
         new_idx["files"].append(target_url)
     with closing(storage.Client(project=config.GCP_PROJECT)) as client:
