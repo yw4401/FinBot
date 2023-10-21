@@ -1,23 +1,46 @@
 import datetime
 import shutil
-import os
 from pathlib import Path
 
 import chromadb
-import numpy as np
 import pandas as pd
 from chromadb.utils import embedding_functions
 from langchain.text_splitter import SentenceTransformersTokenTextSplitter
-from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+import spacy
 
 import config
 from common import upload_blob
+import torch
 
 tqdm.pandas()
+if torch.cuda.is_available():
+    device = "cuda"
+else:
+    device = "cpu"
 
 
-def get_doc_meta(row):
+def strip_reuter_intro(text):
+    text_chunks = text.split(" - ")
+    return " - ".join(text_chunks[1:]).strip()
+
+
+def create_extractor(ner_recog):
+
+    def extractor(chunks):
+        ner_results = ner_recog.pipe(chunks)
+        entities = []
+        for doc in ner_results:
+            chunk_entities = []
+            for ent in doc.ents:
+                chunk_entities.append(ent.text)
+                entities.append(chunk_entities)
+        return entities
+
+    return extractor
+
+
+def get_doc_meta(row, chunk_idx):
     published_time = datetime.datetime.fromisoformat(row["published"])
     epoch_time = datetime.datetime(1970, 1, 1, tzinfo=published_time.tzinfo)
     return {
@@ -26,7 +49,8 @@ def get_doc_meta(row):
         "doc_id": row["id"],
         "topic": row["topic"],
         "topic_prob": row["probability"],
-        "source": row["source"]
+        "source": row["source"],
+        "entity": " ".join(row["entities"][chunk_idx])
     }
 
 
@@ -35,11 +59,16 @@ def build_articles_index(year, month):
                                             file=config.TOPIC_SUBSAMPLE_FILE)
     splitter = SentenceTransformersTokenTextSplitter(model_name=config.ARTICLE_FAISS_EMBEDDING, chunk_overlap=0)
     article_df = pd.read_parquet(src_url.format(year=year, month=month))
+    article_df["body"] = article_df.apply(
+        lambda row: strip_reuter_intro(row["body"] if row["source"] == "reuters" else row["body"]), axis=1)
     article_df["chunks"] = article_df.body.progress_apply(splitter.split_text)
+    ner_recog = spacy.load(config.NER_SPACY_MOD, enable=["ner"])
+    extractor = create_extractor(ner_recog)
+    article_df["entities"] = article_df.chunks.progress_apply(extractor)
 
     chroma_client = chromadb.PersistentClient(path=str(Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "articles")))
     chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.ARTICLE_FAISS_EMBEDDING,
-                                                                            device="cuda")
+                                                                            device=device)
     article_col = chroma_client.get_or_create_collection(name=config.ARTICLE_DB_COLLECTION,
                                                          embedding_function=chroma_embed)
 
@@ -49,9 +78,9 @@ def build_articles_index(year, month):
     cur_id = 0
 
     for i, row in article_df.iterrows():
-        for c in row["chunks"]:
+        for chunk_idx, c in enumerate(row["chunks"]):
             documents.append(c)
-            meta_datas.append(get_doc_meta(row))
+            meta_datas.append(get_doc_meta(row, chunk_idx))
             ids.append(str(cur_id))
             cur_id += 1
 
