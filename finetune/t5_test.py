@@ -40,6 +40,7 @@ if __name__ == "__main__":
     MAX_BODY_TOKEN = 2048
     MAX_SUMMARY_TOKEN = 256
     DTYPE = torch.float16
+    TEMPERATURE = 0
 
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN)
     max_input_length = tokenizer.model_max_length
@@ -49,7 +50,8 @@ if __name__ == "__main__":
     print(test_df["body"].head())
     
     model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, torch_dtype=DTYPE)
-    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, max_new_tokens=MAX_SUMMARY_TOKEN, device=local_rank)
+    summarizer = pipeline("summarization", model=model, tokenizer=tokenizer, temperature=TEMPERATURE,
+                          max_new_tokens=MAX_SUMMARY_TOKEN, device=local_rank)
     summarizer.model = deepspeed.init_inference(
         summarizer.model,
         mp_size=world_size,

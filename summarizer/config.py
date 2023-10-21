@@ -26,7 +26,7 @@ TOPIC_FILTER_FORMAT_SYSTEM = "You are an AI assistant that will format given tex
                              "The formatted output should only contain the topic numbers as integers.\n" \
                              "{format_instructions}"
 TOPIC_FILTER_FORMAT_USER = "{result}"
-TOPIC_K = 10
+TOPIC_K = 3
 
 # Article Response
-ARTICLE_K = 5
+ARTICLE_K = 2

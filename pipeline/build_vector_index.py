@@ -45,6 +45,7 @@ def get_doc_meta(row, chunk_idx):
     epoch_time = datetime.datetime(1970, 1, 1, tzinfo=published_time.tzinfo)
     return {
         "title": row["title"],
+        # "url": row["url"],
         "published": (published_time - epoch_time).days,
         "doc_id": row["id"],
         "topic": row["topic"],

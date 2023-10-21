@@ -2,9 +2,10 @@ from abc import ABC
 from typing import Any, List
 
 import chromadb
-from chromadb import API
+from chromadb import API, EmbeddingFunction
 from chromadb.api.models.Collection import Collection
 from chromadb.utils import embedding_functions
+from langchain.callbacks import StreamingStdOutCallbackHandler
 from langchain.callbacks.base import Callbacks
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.chains import RetrievalQA, LLMChain, SimpleSequentialChain
@@ -25,20 +26,25 @@ except ModuleNotFoundError:
 
 
 class TopicRetriever(BaseRetriever):
-    client: API
-    collection: str
-    embedding: str
-    k: int = config.TOPIC_K
+    topic_client: API
+    article_client: API
+    topic_collection: str
+    doc_collection: str
+    embedding: Any
+    topic_k: int = config.TOPIC_K
+    chunk_k: int = config.ARTICLE_K
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=self.embedding)
-        topic_col = self.client.get_or_create_collection(name=self.collection,
-                                                         embedding_function=chroma_embed)
-        query_results = topic_col.query(query_texts=[query], n_results=self.k)
+        topic_col = self.topic_client.get_or_create_collection(name=self.topic_collection,
+                                                               embedding_function=self.embedding)
+        doc_col = self.article_client.get_or_create_collection(name=self.doc_collection,
+                                                               embedding_function=self.embedding)
+        query_results = topic_col.query(query_texts=[query], n_results=self.topic_k)
         results = []
-        content_template = "Topic {topic}:\n{doc}"
-        for topic, doc in zip(query_results["ids"][0], query_results["documents"][0]):
-            results.append(Document(page_content=content_template.format(topic=topic, doc=doc)))
+        for topic, _ in zip(query_results["ids"][0], query_results["documents"][0]):
+            topic_qresults = doc_col.query(query_texts=query, where={"topic": int(topic)}, n_results=self.chunk_k)
+            for chunk, meta in zip(topic_qresults["documents"][0], topic_qresults["metadatas"][0]):
+                results.append(Document(page_content=chunk, metadata=meta))
         return results
 
 
@@ -70,14 +76,9 @@ def create_topic_qa_chain(model, vector_db, topic, **kwargs):
     return article_chain
 
 
-def topic_aggregate_chain(model, vector_db, topics, sub_kwargs=None, **kwargs):
-    if sub_kwargs is None:
-        sub_kwargs = {}
-    article_chains = [create_topic_qa_chain(model, vector_db, i,
-                                            return_source_documents=True, **sub_kwargs) for i in topics]
-    article_subretriever = ChainRetriever(chains=article_chains)
+def topic_aggregate_chain(model, retriever, **kwargs):
     final_chain = RetrievalQA.from_chain_type(llm=model, chain_type="map_reduce",
-                                              retriever=article_subretriever, **kwargs)
+                                              retriever=retriever, **kwargs)
     return final_chain
 
 
@@ -103,17 +104,22 @@ def create_topic_filter(model, vector_db, **kwargs):
 if __name__ == "__main__":
     chroma = chromadb.PersistentClient(path="topics/topic_indices/topic-2023-4")
     chroma_articles = chromadb.PersistentClient(path="topics/topic_indices/articles-2023-4")
-    topic_retriever = TopicRetriever(client=chroma, collection=config.TOPIC_COLLECTION,
-                                     embedding=config.TOPIC_EMBEDDING)
+    chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.TOPIC_EMBEDDING)
+    topic_retriever = TopicRetriever(topic_client=chroma, article_client=chroma_articles,
+                                     topic_collection=config.TOPIC_COLLECTION,
+                                     doc_collection=config.ARTICLE_COLLECTION,
+                                     embedding=chroma_embed)
 
     plan_llm = ChatVertexAI(
         temperature=0,
         model_name="chat-bison",
-        max_output_tokens=512,
-        verbose=True
+        max_output_tokens=512
     )
+
     query = "Which companies are developing drugs that are currently in the process of approval?"
-    filter_chain = create_topic_filter(plan_llm, topic_retriever, verbose=True)
-    topics = filter_chain(query)
-    agg_chain = topic_aggregate_chain(plan_llm, chroma_articles, topics, return_source_documents=True)
-    print(agg_chain(query))
+    agg_chain = topic_aggregate_chain(plan_llm, topic_retriever, return_source_documents=True, verbose=True)
+    test_result = agg_chain(query)
+    print(test_result["result"].strip())
+    print("Sources")
+    for doc in test_result["source_documents"]:
+        print(doc)

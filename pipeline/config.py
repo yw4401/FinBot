@@ -37,12 +37,20 @@ TOPIC_SUBSAMPLE_TARGET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
 TOPIC_SUBSAMPLE_FILE = "topic-{year}-{month}.parquet"
 
 # Topic Summarization
-TOPIC_SUM_KIND = "openai"
-TOPIC_SUM_MODEL_PARAMS = {
-    "api_key": "../key"
-}
 TOPIC_SUM_TARGET = "scraped-news-article-data-null"
 TOPIC_SUM_TARGET_FILE = "topicsum-{year}-{month}.parquet"
+TOPIC_SUM_HF_PROMPT = "summarize in bullet points:\n{text}"
+TOPIC_SUM_LC_SYSTEM_PROMPT = "A list of news article titles with the published time is given below. " + \
+                             "Using only the provided information, summarize the theme of the titles such that it will be easy to answer investing related questions from the summary. " + \
+                             'Before providing the summary, explain how the summary can be used to answer investing related questions. ' + \
+                             "Be specific about the dates and entities involved. " + \
+                             "Be concise in writing the summary, but try not to omit important details. " + \
+                             'Do not use vague terms such as "past few months", "various companies", or "the disease". Use the actual names if possible. ' + \
+                             'If a clear theme relevant to investing is not present, maintain the specified format, use "SUMMARY: NO THEME" as the summary. ' + \
+                             'The format of the output should be:\nEXPLANATION:\nthe explanation\nSUMMARY:\nthe summary'
+TOPIC_SUM_LC_USER_PROMPT = "{text}"
+TOPIC_SUM_LC_REGEX = r"SUMMARY:(?P<summary>(.|\n)+)"
+TOPIC_SUM_LC_DEFAULT = "NO THEME"
 
 # NER
 NER_SPACY_MOD = "en_core_web_md"
@@ -67,10 +75,10 @@ TOPIC_FAISS_BATCH = 16
 VERTEX_AI_KEY_PATH = "../nlp-final-386206-e7043b88437d.json"
 VERTEX_AI_PROJECT = "nlp-final-386206"
 SUMMARY_AUG_SYSTEM = "You are a helpful AI assistant that will come up with a good question that can be answered by the given text, " \
-                     "and a good question that cannot be answered by the text. "\
+                     "and a good question that cannot be answered by the text. " \
                      "The answer to the answerable question must be from the information in the provided text. " \
                      "The question must be something that a retail investor is likely going to ask. " \
-                     "The output should be formatted as:\n" +\
+                     "The output should be formatted as:\n" + \
                      """Response:
 REASON (Unanswerable): reason why a retail investor would ask the question that cannot be answered.
 UNANSWERABLE: reason why the question cannot be answered with only information from the text.
