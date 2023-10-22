@@ -11,7 +11,7 @@ import os
 import multiprocessing as mp
 import numpy as np
 from tqdm import tqdm
-from consolidate_scraper import write_conversion_index
+from consolidate_scraper_1 import write_conversion_index
 
 
 class DownloadArticle:
