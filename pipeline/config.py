@@ -56,6 +56,9 @@ TOPIC_SUM_LC_DEFAULT = "NO THEME"
 NER_SPACY_MOD = "en_core_web_md"
 
 # Chroma Articles
+ARTICLE_SPLITTER_TOKENIZER = "google/flan-t5-xxl"
+ARTICLE_SPLITTER_CHUNK_SIZE = 256
+ARTICLE_SPLITTER_CHUNK_OVERLAP = 0
 ARTICLE_FAISS_TEMP_DIRECTORY = "./article_db"
 ARTICLE_FAISS_EMBEDDING = "../embeddings"
 ARTICLE_DB_COLLECTION = "articles"
@@ -77,15 +80,17 @@ ES_KEY_PATH = "../es_key"
 ES_TOPIC_INDEX = "topics"
 ES_TOPIC_MAPPING = {
     "properties": {
-        "topic": {"type": "integer"},
-        "description": {"type": "text"},
-        "created_at": {"type": "date"},
+        "description": {"type": "text", "index": True},
         "description_embedding": {
+            "type": "dense_vector",
+            "dims": 1024,
+            "index": True,
+            "similarity": "cosine"
+        },
+        "metadata": {
             "properties": {
-                "predicted_value": {
-                    "type": "dense_vector",
-                    "dims": 1024
-                }
+                "topic": {"type": "integer", "index": True},
+                "created_at": {"type": "date", "index": True}
             }
         }
     }
@@ -96,16 +101,18 @@ ES_ARTICLE_INDEX = "articles"
 ES_ARTICLE_ENTITIES = {"ORG", "PERSON", "GPE", "PRODUCT", "LAW"}
 ES_ARTICLES_MAPPING = {
     "properties": {
-        "topic": {"type": "integer"},
-        "chunk_text": {"type": "text"},
-        "entities": {"type": "text"},
-        "published_at": {"type": "date"},
+        "chunk_text": {"type": "text", "index": True},
         "chunk_text_embedding": {
+            "type": "dense_vector",
+            "dims": 1024,
+            "index": True,
+            "similarity": "cosine"
+        },
+        "metadata": {
             "properties": {
-                "predicted_value": {
-                    "type": "dense_vector",
-                    "dims": 1024
-                }
+                "entities": {"type": "text", "index": True},
+                "topic": {"type": "integer", "index": True},
+                "published_at": {"type": "date", "index": True},
             }
         }
     }

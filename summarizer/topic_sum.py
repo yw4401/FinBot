@@ -1,21 +1,14 @@
-from abc import ABC
 from typing import Any, List
 
-import chromadb
-from chromadb import API, EmbeddingFunction
-from chromadb.api.models.Collection import Collection
-from chromadb.utils import embedding_functions
-from langchain.callbacks import StreamingStdOutCallbackHandler
-from langchain.callbacks.base import Callbacks
+from chromadb import API
+from joblib import Parallel, delayed
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.chains import RetrievalQA, LLMChain, SimpleSequentialChain
-from langchain.chains.combine_documents.base import BaseCombineDocumentsChain
 from langchain.chains.retrieval_qa.base import BaseRetrievalQA
 from langchain.chat_models import ChatVertexAI
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.output_parsers import CommaSeparatedListOutputParser
-from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatMessagePromptTemplate, \
-    ChatPromptTemplate
+from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate
 from langchain.schema import Document, BaseRetriever
 from langchain.vectorstores import Chroma, ElasticsearchStore
 
@@ -49,15 +42,25 @@ class ChromaTopicRetriever(BaseRetriever):
 
 
 class ElasticSearchTopicRetriever(BaseRetriever):
-
     topic_elasticstore: ElasticsearchStore
     chunks_elasticstore: ElasticsearchStore
     topic_k: int = config.TOPIC_K
     chunk_k: int = config.ARTICLE_K
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        topic_results = self.topic_elasticstore.similarity_search(query, k=self.topic_k)
-        pass
+        topic_results = self.topic_elasticstore.max_marginal_relevance_search(query, k=self.topic_k)
+        parallel = Parallel(n_jobs=self.topic_k, backend="threading", return_as="generator")
+        result = []
+        topic_nums = [topic.metadata["topic"] for topic in topic_results]
+        for chunk in parallel(delayed(self._get_relevant_chunks)(t, query) for t in topic_nums):
+            result.extend(chunk)
+        return result
+
+    def _get_relevant_chunks(self, topic_num, query):
+        chunk_results = self.chunks_elasticstore.max_marginal_relevance_search(query=query, k=self.chunk_k,
+                                                                               filter=[{"term": {
+                                                                                   "metadata.topic": topic_num}}])
+        return chunk_results
 
 
 class ChainRetriever(BaseRetriever):
@@ -114,14 +117,21 @@ def create_topic_filter(model, vector_db, **kwargs):
 
 
 if __name__ == "__main__":
-    chroma = chromadb.PersistentClient(path="topics/topic_indices/topic-2023-4")
-    chroma_articles = chromadb.PersistentClient(path="topics/topic_indices/articles-2023-4")
-    chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.TOPIC_EMBEDDING)
-    topic_retriever = ChromaTopicRetriever(topic_client=chroma, article_client=chroma_articles,
-                                           topic_collection=config.TOPIC_COLLECTION,
-                                           doc_collection=config.ARTICLE_COLLECTION,
-                                           embedding=chroma_embed)
+    with open(config.ES_KEY_PATH, "r") as fp:
+        es_key = fp.read().strip()
+    with open(config.ES_CLOUD_ID_PATH, "r") as fp:
+        es_id = fp.read().strip()
 
+    embedding = SentenceTransformerEmbeddings(model_name=config.FILTER_EMBEDDINGS)
+    topic_store = ElasticsearchStore(index_name=config.ES_TOPIC_INDEX, embedding=embedding,
+                                     es_cloud_id=es_id, es_api_key=es_key,
+                                     vector_query_field=config.ES_TOPIC_VECTOR_FIELD,
+                                     query_field=config.ES_TOPIC_FIELD)
+    article_store = ElasticsearchStore(index_name=config.ES_ARTICLE_INDEX, embedding=embedding,
+                                       es_cloud_id=es_id, es_api_key=es_key,
+                                       vector_query_field=config.ES_ARTICLE_VECTOR_FIELD,
+                                       query_field=config.ES_ARTICLE_FIELD)
+    retriever = ElasticSearchTopicRetriever(topic_elasticstore=topic_store, chunks_elasticstore=article_store)
     plan_llm = ChatVertexAI(
         temperature=0,
         model_name="chat-bison",
@@ -129,7 +139,7 @@ if __name__ == "__main__":
     )
 
     query = "Which companies are developing drugs that are currently in the process of approval?"
-    agg_chain = topic_aggregate_chain(plan_llm, topic_retriever, return_source_documents=True, verbose=True)
+    agg_chain = topic_aggregate_chain(plan_llm, retriever, return_source_documents=True, verbose=True)
     test_result = agg_chain(query)
     print(test_result["result"].strip())
     print("Sources")

@@ -8,9 +8,10 @@ import spacy
 import torch
 from chromadb.utils import embedding_functions
 from elasticsearch import Elasticsearch, NotFoundError
-from langchain.text_splitter import SentenceTransformersTokenTextSplitter
+from langchain.text_splitter import SpacyTextSplitter
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 import config
 from common import upload_blob
@@ -36,7 +37,7 @@ def create_extractor(ner_recog):
             for ent in doc.ents:
                 if ent.label_ in config.ES_ARTICLE_ENTITIES:
                     chunk_entities.append(ent.text)
-                entities.append(chunk_entities)
+            entities.append(chunk_entities)
         return entities
 
     return extractor
@@ -57,17 +58,35 @@ def get_doc_chroma_meta(row, chunk_idx):
     }
 
 
-def build_chroma_articles_index(year, month):
-    src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
-                                            file=config.TOPIC_SUBSAMPLE_FILE)
-    splitter = SentenceTransformersTokenTextSplitter(model_name=config.ARTICLE_FAISS_EMBEDDING, chunk_overlap=0)
-    article_df = pd.read_parquet(src_url.format(year=year, month=month))
+def create_splitter():
+    tokenizer = AutoTokenizer.from_pretrained(config.ARTICLE_SPLITTER_TOKENIZER)
+
+    def _huggingface_tokenizer_length(text: str) -> int:
+        return len(tokenizer.encode(text))
+
+    splitter = SpacyTextSplitter(length_function=_huggingface_tokenizer_length,
+                                 chunk_overlap=config.ARTICLE_SPLITTER_CHUNK_OVERLAP,
+                                 chunk_size=config.ARTICLE_SPLITTER_CHUNK_SIZE)
+    return splitter
+
+
+def preprocess_articles(article_df, splitter):
+    article_df = article_df.copy()
     article_df["body"] = article_df.apply(
         lambda row: strip_reuter_intro(row["body"] if row["source"] == "reuters" else row["body"]), axis=1)
     article_df["chunks"] = article_df.body.progress_apply(splitter.split_text)
     ner_recog = spacy.load(config.NER_SPACY_MOD, enable=["ner"])
     extractor = create_extractor(ner_recog)
     article_df["entities"] = article_df.chunks.progress_apply(extractor)
+    return article_df
+
+
+def build_chroma_articles_index(year, month):
+    src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
+                                            file=config.TOPIC_SUBSAMPLE_FILE)
+    splitter = create_splitter()
+    article_df = pd.read_parquet(src_url.format(year=year, month=month))
+    article_df = preprocess_articles(article_df, splitter)
 
     chroma_client = chromadb.PersistentClient(path=str(Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "articles")))
     chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.ARTICLE_FAISS_EMBEDDING,
@@ -130,11 +149,11 @@ def build_chroma_topic_index(year, month):
 def create_es_topic_doc(encoder: SentenceTransformer, row):
     embedding = encoder.encode(row["summary"])
     return {
-        "topic": int(row["topics"]),
-        "created_at": row["created_at"],
         "description": row["summary"],
-        "description_embedding": {
-            "predicted_value": embedding.tolist()
+        "description_embedding": embedding.tolist(),
+        "metadata": {
+            "topic": int(row["topics"]),
+            "created_at": row["created_at"],
         }
     }
 
@@ -162,12 +181,12 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
     for i, chunk in enumerate(row["chunks"]):
         chunk_id = "{article_id}-{chunk_idx}".format(article_id=row["id"], chunk_idx=i)
         yield chunk_id, {
-            "topic": int(row["topic"]),
             "chunk_text": chunk,
-            "entities": " ".join(row["entities"][i]),
-            "published_at": published,
-            "chunk_text_embedding": {
-                "predicted_value": embeddings[i].tolist()
+            "chunk_text_embedding": embeddings[i].tolist(),
+            "metadata": {
+                "entities": " ".join(row["entities"][i]),
+                "published_at": published,
+                "topic": int(row["topic"])
             }
         }
 
@@ -179,13 +198,7 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
         client.indices.create(index=config.ES_ARTICLE_INDEX, mappings=config.ES_ARTICLES_MAPPING)
         client.indices.get(index=config.ES_ARTICLE_INDEX)
 
-    splitter = SentenceTransformersTokenTextSplitter(model_name=config.ARTICLE_FAISS_EMBEDDING, chunk_overlap=0)
-    article_df["body"] = article_df.apply(
-        lambda row: strip_reuter_intro(row["body"] if row["source"] == "reuters" else row["body"]), axis=1)
-    article_df["chunks"] = article_df.body.progress_apply(splitter.split_text)
-    ner_recog = spacy.load(config.NER_SPACY_MOD, enable=["ner"])
-    extractor = create_extractor(ner_recog)
-    article_df["entities"] = article_df.chunks.progress_apply(extractor)
+    article_df = preprocess_articles(article_df, splitter=create_splitter())
 
     with tqdm(total=article_df.shape[0]) as progress:
         for i, row in article_df.iterrows():
@@ -203,7 +216,7 @@ if __name__ == "__main__":
     with open(config.ES_CLOUD_ID_PATH, "r") as fp:
         es_id = fp.read().strip()
     elastic_client = Elasticsearch(cloud_id=es_id, api_key=es_key)
-    encoder = SentenceTransformer(model_name_or_path=config.TOPIC_FAISS_EMBEDDING)
+    encoder = SentenceTransformer(model_name_or_path=config.TOPIC_FAISS_EMBEDDING, device=device)
     topic_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUM_TARGET,
                                               file=config.TOPIC_SUM_TARGET_FILE)
     topic_sum_df = pd.read_parquet(topic_url.format(year=year, month=month))

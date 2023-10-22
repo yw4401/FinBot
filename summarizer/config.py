@@ -16,9 +16,19 @@ TOPIC_SUMMARY_INDEX_FILE = "topic-chroma-{year}-{month}.zip"
 
 # Embeddings
 OPENAI_API = "./key"
-TOPIC_EMBEDDING = "thenlper/gte-base"
+FILTER_EMBEDDINGS = "../embeddings"
 TOPIC_COLLECTION = "topics"
 ARTICLE_COLLECTION = "articles"
+
+# Elasticsearch
+ES_CLOUD_ID_PATH = "../es_id"
+ES_KEY_PATH = "../es_key"
+ES_TOPIC_INDEX = "topics"
+ES_ARTICLE_INDEX = "articles"
+ES_TOPIC_VECTOR_FIELD = "description_embedding"
+ES_TOPIC_FIELD = "description"
+ES_ARTICLE_VECTOR_FIELD = "chunk_text_embedding"
+ES_ARTICLE_FIELD = "chunk_text"
 
 # Topic Filtering
 TOPIC_FILTER_RAW_TEMPLATE = "Which topics are relevant to the query: {question}"
