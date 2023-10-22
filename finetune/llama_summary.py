@@ -18,6 +18,7 @@ import pandas as pd
 @dataclass
 class ScriptArguments:
     model_path: Optional[str] = field(default="./Llama-2-7b-chat-hf")
+    token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
     eval_size: Optional[float] = field(default=1000)
@@ -54,14 +55,13 @@ def format_prompt(examples):
         "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
     )
     dialog_texts: List[str] = sum(
-        [
+        *[
             f"{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} "
             for prompt, answer in zip(
-            examples[::2],
-            examples[1::2],
-        )
-        ],
-        [],
+                examples[::2],
+                examples[1::2],
+            )
+        ]
     )
 
     dialog_texts += [f"{B_INST} {(examples[-1]['content']).strip()} {E_INST}"]
@@ -106,7 +106,10 @@ def main():
     train_args: TrainingArguments = cast(TrainingArguments, train_args)
     script_args: ScriptArguments = cast(ScriptArguments, script_args)
 
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, use_auth_token=True)
+    with open(script_args.token_path, "r") as fp:
+        hf_token = fp.read().strip()
+
+    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
@@ -139,7 +142,7 @@ def main():
 
     # loading the base model
     model = AutoModelForCausalLM.from_pretrained(
-        script_args.model_path, use_cache=not train_args.gradient_checkpointing, use_auth_token=True
+        script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token
     )
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
