@@ -4,14 +4,16 @@ from pathlib import Path
 
 import chromadb
 import pandas as pd
-from chromadb.utils import embedding_functions
-from langchain.text_splitter import SentenceTransformersTokenTextSplitter
-from tqdm import tqdm
 import spacy
+import torch
+from chromadb.utils import embedding_functions
+from elasticsearch import Elasticsearch, NotFoundError
+from langchain.text_splitter import SentenceTransformersTokenTextSplitter
+from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
 
 import config
 from common import upload_blob
-import torch
 
 tqdm.pandas()
 if torch.cuda.is_available():
@@ -26,21 +28,21 @@ def strip_reuter_intro(text):
 
 
 def create_extractor(ner_recog):
-
     def extractor(chunks):
         ner_results = ner_recog.pipe(chunks)
         entities = []
         for doc in ner_results:
             chunk_entities = []
             for ent in doc.ents:
-                chunk_entities.append(ent.text)
+                if ent.label_ in config.ES_ARTICLE_ENTITIES:
+                    chunk_entities.append(ent.text)
                 entities.append(chunk_entities)
         return entities
 
     return extractor
 
 
-def get_doc_meta(row, chunk_idx):
+def get_doc_chroma_meta(row, chunk_idx):
     published_time = datetime.datetime.fromisoformat(row["published"])
     epoch_time = datetime.datetime(1970, 1, 1, tzinfo=published_time.tzinfo)
     return {
@@ -55,7 +57,7 @@ def get_doc_meta(row, chunk_idx):
     }
 
 
-def build_articles_index(year, month):
+def build_chroma_articles_index(year, month):
     src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
                                             file=config.TOPIC_SUBSAMPLE_FILE)
     splitter = SentenceTransformersTokenTextSplitter(model_name=config.ARTICLE_FAISS_EMBEDDING, chunk_overlap=0)
@@ -81,7 +83,7 @@ def build_articles_index(year, month):
     for i, row in article_df.iterrows():
         for chunk_idx, c in enumerate(row["chunks"]):
             documents.append(c)
-            meta_datas.append(get_doc_meta(row, chunk_idx))
+            meta_datas.append(get_doc_chroma_meta(row, chunk_idx))
             ids.append(str(cur_id))
             cur_id += 1
 
@@ -96,7 +98,7 @@ def build_articles_index(year, month):
                 destination_blob_name=dest_file, generation=None)
 
 
-def build_topic_index(year, month):
+def build_chroma_topic_index(year, month):
     src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUM_TARGET,
                                             file=config.TOPIC_SUM_TARGET_FILE)
     topic_sum_df = pd.read_parquet(src_url.format(year=year, month=month))
@@ -125,16 +127,92 @@ def build_topic_index(year, month):
                 destination_blob_name=dest_file, generation=None)
 
 
+def create_es_topic_doc(encoder: SentenceTransformer, row):
+    embedding = encoder.encode(row["summary"])
+    return {
+        "topic": int(row["topics"]),
+        "created_at": row["created_at"],
+        "description": row["summary"],
+        "description_embedding": {
+            "predicted_value": embedding.tolist()
+        }
+    }
+
+
+def create_es_topic_idx(client: Elasticsearch, encoder, topic_sum_df):
+    topic_id_format = "{topic_created_at}-{topic_num}"
+    try:
+        client.indices.get(index=config.ES_TOPIC_INDEX)
+    except NotFoundError as e:
+        client.indices.create(index=config.ES_TOPIC_INDEX, mappings=config.ES_TOPIC_MAPPING)
+        client.indices.get(index=config.ES_TOPIC_INDEX)
+
+    with tqdm(total=topic_sum_df.shape[0]) as progress:
+        for i, topic in topic_sum_df.iterrows():
+            doc_id = topic_id_format.format(topic_created_at=topic["created_at"], topic_num=topic["topics"])
+            client.update(index=config.ES_TOPIC_INDEX, id=doc_id,
+                          doc=create_es_topic_doc(encoder, topic), doc_as_upsert=True)
+            progress.update(1)
+
+
+def create_es_chunk_docs(encoder: SentenceTransformer, row):
+    embeddings = encoder.encode(row["chunks"])
+    published = datetime.datetime.fromisoformat(row["published"]).replace(tzinfo=datetime.timezone.utc)
+    published = published.strftime('%Y-%m-%d')
+    for i, chunk in enumerate(row["chunks"]):
+        chunk_id = "{article_id}-{chunk_idx}".format(article_id=row["id"], chunk_idx=i)
+        yield chunk_id, {
+            "topic": int(row["topic"]),
+            "chunk_text": chunk,
+            "entities": " ".join(row["entities"][i]),
+            "published_at": published,
+            "chunk_text_embedding": {
+                "predicted_value": embeddings[i].tolist()
+            }
+        }
+
+
+def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
+    try:
+        client.indices.get(index=config.ES_ARTICLE_INDEX)
+    except NotFoundError as e:
+        client.indices.create(index=config.ES_ARTICLE_INDEX, mappings=config.ES_ARTICLES_MAPPING)
+        client.indices.get(index=config.ES_ARTICLE_INDEX)
+
+    splitter = SentenceTransformersTokenTextSplitter(model_name=config.ARTICLE_FAISS_EMBEDDING, chunk_overlap=0)
+    article_df["body"] = article_df.apply(
+        lambda row: strip_reuter_intro(row["body"] if row["source"] == "reuters" else row["body"]), axis=1)
+    article_df["chunks"] = article_df.body.progress_apply(splitter.split_text)
+    ner_recog = spacy.load(config.NER_SPACY_MOD, enable=["ner"])
+    extractor = create_extractor(ner_recog)
+    article_df["entities"] = article_df.chunks.progress_apply(extractor)
+
+    with tqdm(total=article_df.shape[0]) as progress:
+        for i, row in article_df.iterrows():
+            for id_chunk, doc in create_es_chunk_docs(encoder, row):
+                client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
+            progress.update(1)
+
+
 if __name__ == "__main__":
     year = 2023
     month = 4
-    try:
-        print("Building Article Indices")
-        build_articles_index(year=year, month=month)
-        print("Building Topic Indices")
-        build_topic_index(year=year, month=month)
-    finally:
-        try:
-            shutil.rmtree(config.ARTICLE_FAISS_TEMP_DIRECTORY)
-        except FileNotFoundError:
-            pass
+
+    with open(config.ES_KEY_PATH, "r") as fp:
+        es_key = fp.read().strip()
+    with open(config.ES_CLOUD_ID_PATH, "r") as fp:
+        es_id = fp.read().strip()
+    elastic_client = Elasticsearch(cloud_id=es_id, api_key=es_key)
+    encoder = SentenceTransformer(model_name_or_path=config.TOPIC_FAISS_EMBEDDING)
+    topic_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUM_TARGET,
+                                              file=config.TOPIC_SUM_TARGET_FILE)
+    topic_sum_df = pd.read_parquet(topic_url.format(year=year, month=month))
+    topic_sum_df["created_at"] = f"{year}-{month:02d}-30"
+    article_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
+                                                file=config.TOPIC_SUBSAMPLE_FILE)
+    article_df = pd.read_parquet(article_url.format(year=year, month=month))
+
+    print("Building Topic Indices")
+    create_es_topic_idx(client=elastic_client, encoder=encoder, topic_sum_df=topic_sum_df)
+    print("Building Article Indices")
+    create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df)

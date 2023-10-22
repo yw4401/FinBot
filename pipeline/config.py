@@ -55,9 +55,9 @@ TOPIC_SUM_LC_DEFAULT = "NO THEME"
 # NER
 NER_SPACY_MOD = "en_core_web_md"
 
-# FAISS Articles
+# Chroma Articles
 ARTICLE_FAISS_TEMP_DIRECTORY = "./article_db"
-ARTICLE_FAISS_EMBEDDING = "thenlper/gte-base"
+ARTICLE_FAISS_EMBEDDING = "../embeddings"
 ARTICLE_DB_COLLECTION = "articles"
 TOPICS_DB_COLLECTION = "topics"
 ARTICLE_FAISS_TARGET = "scraped-news-article-data-null"
@@ -65,11 +65,51 @@ ARTICLE_FAISS_FILE = "article-chroma-{year}-{month}.zip"
 ARTICLE_FAISS_BATCH = 16
 ARTICLE_FAISS_PROCESSES = None
 
-# FAISS Topics
+# Chroma Topics
 TOPIC_FAISS_EMBEDDING = ARTICLE_FAISS_EMBEDDING
 TOPIC_FAISS_TARGET = "scraped-news-article-data-null"
 TOPIC_FAISS_FILE = "topic-chroma-{year}-{month}.zip"
 TOPIC_FAISS_BATCH = 16
+
+# Elasticsearch Topics
+ES_CLOUD_ID_PATH = "../es_id"
+ES_KEY_PATH = "../es_key"
+ES_TOPIC_INDEX = "topics"
+ES_TOPIC_MAPPING = {
+    "properties": {
+        "topic": {"type": "integer"},
+        "description": {"type": "text"},
+        "created_at": {"type": "date"},
+        "description_embedding": {
+            "properties": {
+                "predicted_value": {
+                    "type": "dense_vector",
+                    "dims": 1024
+                }
+            }
+        }
+    }
+}
+
+# Elasticsearch Articles
+ES_ARTICLE_INDEX = "articles"
+ES_ARTICLE_ENTITIES = {"ORG", "PERSON", "GPE", "PRODUCT", "LAW"}
+ES_ARTICLES_MAPPING = {
+    "properties": {
+        "topic": {"type": "integer"},
+        "chunk_text": {"type": "text"},
+        "entities": {"type": "text"},
+        "published_at": {"type": "date"},
+        "chunk_text_embedding": {
+            "properties": {
+                "predicted_value": {
+                    "type": "dense_vector",
+                    "dims": 1024
+                }
+            }
+        }
+    }
+}
 
 # AI Assisted Summary Augmentation
 VERTEX_AI_KEY_PATH = "../nlp-final-386206-e7043b88437d.json"
