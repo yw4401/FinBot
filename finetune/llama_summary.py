@@ -1,18 +1,19 @@
 from dataclasses import dataclass, field
 from typing import cast, Optional, List
+
+import pandas as pd
 import torch
-import config
-from datasets import load_dataset, Dataset, DatasetDict
+from datasets import Dataset, DatasetDict
+from peft import LoraConfig
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
     HfArgumentParser,
 )
-from trl import SFTTrainer
-import transformers
-from peft import LoraConfig, get_peft_model
-import pandas as pd
+from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+
+import config
 
 
 @dataclass
@@ -22,7 +23,7 @@ class ScriptArguments:
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
     eval_size: Optional[float] = field(default=1000)
-    lora_target: Optional[List[str]] = ("q_proj", "v_proj")
+    lora_target: Optional[List[str]] = ("q_proj", "k_proj", "v_proj")
     cache_dir: Optional[str] = "./transformers"
     lora_r: Optional[int] = field(default=32)
     lora_alpha: Optional[int] = field(default=32)
@@ -54,11 +55,11 @@ def format_prompt(examples):
         "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
     )
     dialog_texts: List[str] = [
-            f"<s>{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} </s>"
-            for prompt, answer in zip(
-                examples[::2],
-                examples[1::2],
-            )
+        f"<s>{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} </s>"
+        for prompt, answer in zip(
+            examples[::2],
+            examples[1::2],
+        )
     ]
     return "".join(dialog_texts)
 
@@ -66,27 +67,23 @@ def format_prompt(examples):
 def format_example(example):
     q_header = "### Question"
     c_header = "### Context"
+    s_header = "### Summary\n"
 
-    q = example["question"]
-    c = example["body"]
+    output_texts = []
+    for i in range(len(example['body'])):
+        q = example["question"][i]
+        c = example["body"][i]
+        s = s_header + example["summary"][i]
 
-    user = f"{q_header}\n{q}\n\n{c_header}\n{c}"
+        user = f"{q_header}\n{q}\n\n{c_header}\n{c}"
+        text = format_prompt([
+            {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
+            {"role": "user", "content": user},
+            {"role": "assistant", "content": s}
+        ])
+        output_texts.append(text)
 
-    example["text"] = format_prompt([
-        {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
-        {"role": "user", "content": user},
-        {"role": "assistant", "content": example["summary"]}
-    ])
-    return example
-
-
-def prepare_dataset(dataset, formatter_func, tokenizer):
-    # formatting each sample
-    dataset_prepared = dataset.map(
-        formatter_func
-    )
-
-    return dataset_prepared
+    return output_texts
 
 
 def main():
@@ -98,7 +95,7 @@ def main():
     with open(script_args.token_path, "r") as fp:
         hf_token = fp.read().strip()
 
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token)
+    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token, model_max_length=4096)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
@@ -107,13 +104,8 @@ def main():
     print(train_df.head())
     print(train_df.summary.iloc[0])
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
-    dataset = prepare_dataset(
-        dataset=train_data,
-        formatter_func=format_example,
-        tokenizer=tokenizer,
-    )
     raw_datasets = DatasetDict({
-        "train": dataset
+        "train": train_data
     })
 
     # preparing lora configuration
@@ -128,15 +120,21 @@ def main():
 
     # loading the base model
     model = AutoModelForCausalLM.from_pretrained(
-        script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token, torch_dtype=torch.bfloat16
+        script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+        torch_dtype=torch.bfloat16, use_flash_attention_2=True, neftune_noise_alpha=5
     )
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
     print(raw_datasets["train"])
-    # creating trainer
+    # creating trainer with collator
+    response_template = "### Summary"
+    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
+
     trainer = SFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], dataset_text_field="text", max_seq_length=4096, peft_config=peft_config,
+        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_prompt,
+        data_collator=collator,
+        max_seq_length=4096, peft_config=peft_config, packing=False
     )
     # trainer.accelerator.print(f"{trainer.model}")
     trainer.model.print_trainable_parameters()
