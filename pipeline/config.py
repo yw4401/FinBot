@@ -13,6 +13,10 @@ ARTICLE_CONVERT_SUBSAMPLE_TARGET = "scraped-news-article-data-null"
 ARTICLE_CONVERT_SUBSAMPLE_FILE = "subsample-{year}-{month}.parquet"
 ARTICLE_CONVERT_SUBSAMPLE_IDX = "scraper-subsample.json"
 
+# Deduplication
+ARTICLE_DEDUP_TARGET_BUCKET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
+ARTICLE_DEDUP_FILE = "dedup-{year}-{month}.parquet"
+
 # Fine-tuning Ingestion
 FINE_TUNE_TARGET_BUCKET = "scraped-news-article-data-null"
 FINE_TUNE_FILE_PATTERN = "fine-tune-summary-{split}.parquet"
