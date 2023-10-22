@@ -77,11 +77,12 @@ def format_example(example):
 
     user = f"{q_header}\n{q}\n\n{c_header}\n{c}"
 
-    return format_prompt([
+    example["text"] = format_prompt([
         {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
         {"role": "user", "content": user},
         {"role": "assistant", "content": example["summary"]}
     ])
+    return example
 
 
 def prepare_dataset(dataset, formatter_func, tokenizer):
