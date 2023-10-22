@@ -5,5 +5,9 @@ The Retail Investor News Analysis web application uses large language models and
 
 ## Project Overflow
 
+### Web Scraping for Data Collection
+- We've gathered data from prominent news sources, including CNBC, The New York Times, and Reuters, as part of the data collection phase. The [common.py](scraper/common.py) is a framework that serves as the backbone for the web scraper. It encapsulates the essential functionality of traversing HTML pages by following links, verifying if a URL has already been scraped, and progressing to the subsequent page.
+- 
+
 
 
