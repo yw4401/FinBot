@@ -1,16 +1,16 @@
 from dataclasses import dataclass, field
 from typing import cast, Optional, List
-
+import torch
 import config
 from datasets import load_dataset, Dataset, DatasetDict
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    Trainer,
-    DataCollatorForLanguageModeling,
     TrainingArguments,
     HfArgumentParser,
 )
+from trl import SFTTrainer
+import transformers
 from peft import LoraConfig, get_peft_model
 import pandas as pd
 
@@ -22,8 +22,7 @@ class ScriptArguments:
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
     eval_size: Optional[float] = field(default=1000)
-    lora_target: Optional[List[str]] = ("q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj",
-                                        "down_proj", "lm_head")
+    lora_target: Optional[List[str]] = ("q_proj", "v_proj")
     cache_dir: Optional[str] = "./transformers"
     lora_r: Optional[int] = field(default=32)
     lora_alpha: Optional[int] = field(default=32)
@@ -54,17 +53,13 @@ def format_prompt(examples):
         "model only supports 'system', 'user' and 'assistant' roles, "
         "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
     )
-    dialog_texts: List[str] = sum(
-        *[
-            f"{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} "
+    dialog_texts: List[str] = [
+            f"<s>{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} </s>"
             for prompt, answer in zip(
                 examples[::2],
                 examples[1::2],
             )
-        ]
-    )
-
-    dialog_texts += [f"{B_INST} {(examples[-1]['content']).strip()} {E_INST}"]
+    ]
     return "".join(dialog_texts)
 
 
@@ -88,13 +83,7 @@ def format_example(example):
 def prepare_dataset(dataset, formatter_func, tokenizer):
     # formatting each sample
     dataset_prepared = dataset.map(
-        formatter_func, remove_columns=list(dataset.features)
-    )
-
-    # apply tokenizer
-    dataset_prepared = dataset_prepared.map(
-        lambda sample: tokenizer(sample["text"]),
-        remove_columns=list(dataset_prepared.features),
+        formatter_func
     )
 
     return dataset_prepared
@@ -127,9 +116,6 @@ def main():
         "train": dataset
     })
 
-    # preparing data collator
-    collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-
     # preparing lora configuration
     peft_config = LoraConfig(
         r=script_args.lora_r,
@@ -142,19 +128,15 @@ def main():
 
     # loading the base model
     model = AutoModelForCausalLM.from_pretrained(
-        script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token
+        script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token, torch_dtype=torch.bfloat16
     )
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
-    # getting peft model
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
-    model.config.use_cache = False
-
+    print(raw_datasets["train"])
     # creating trainer
-    trainer = Trainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], data_collator=collator
+    trainer = SFTTrainer(
+        model=model, args=train_args, train_dataset=raw_datasets["train"], dataset_text_field="text", max_seq_length=4096, peft_config=peft_config,
     )
     # trainer.accelerator.print(f"{trainer.model}")
     trainer.model.print_trainable_parameters()
@@ -164,15 +146,9 @@ def main():
 
     # save model on main process
     trainer.accelerator.wait_for_everyone()
-    state_dict = trainer.accelerator.get_state_dict(trainer.deepspeed)
-    unwrapped_model = trainer.accelerator.unwrap_model(trainer.deepspeed)
-    if trainer.accelerator.is_main_process:
-        unwrapped_model.save_pretrained(train_args.output_dir, state_dict=state_dict)
-    trainer.accelerator.wait_for_everyone()
-
     # save everything else on main process
     if trainer.args.process_index == 0:
-        trainer.model.save_pretrained(train_args.output_dir, safe_serialization=True)
+        trainer.save_model()
 
 
 if __name__ == "__main__":
