@@ -106,7 +106,7 @@ def main():
     train_args: TrainingArguments = cast(TrainingArguments, train_args)
     script_args: ScriptArguments = cast(ScriptArguments, script_args)
 
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path)
+    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, use_auth_token=True)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
@@ -139,7 +139,7 @@ def main():
 
     # loading the base model
     model = AutoModelForCausalLM.from_pretrained(
-        script_args.model_path, use_cache=not train_args.gradient_checkpointing
+        script_args.model_path, use_cache=not train_args.gradient_checkpointing, use_auth_token=True
     )
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
