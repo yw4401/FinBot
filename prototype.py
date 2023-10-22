@@ -29,8 +29,8 @@ topic_dir = str(Path(summarizer.config.TOPIC_SUMMARY_INDEX_DIR,
                      summarizer.config.TOPIC_SUMMARY_INDEX_PATTERN.format(year=year, month=month)))
 chroma = chromadb.PersistentClient(path="topics/topic_indices/topic-2023-4")
 chroma_articles = chromadb.PersistentClient(path="topics/topic_indices/articles-2023-4")
-topic_retriever = TopicRetriever(client=chroma, collection=config.TOPIC_COLLECTION,
-                                 embedding=config.TOPIC_EMBEDDING)
+topic_retriever = ChromaTopicRetriever(client=chroma, collection=config.TOPIC_COLLECTION,
+                                       embedding=config.TOPIC_EMBEDDING)
 plan_llm = ChatVertexAI(
     temperature=0,
     model_name="chat-bison",

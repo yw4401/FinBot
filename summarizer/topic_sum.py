@@ -17,7 +17,7 @@ from langchain.output_parsers import CommaSeparatedListOutputParser
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatMessagePromptTemplate, \
     ChatPromptTemplate
 from langchain.schema import Document, BaseRetriever
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import Chroma, ElasticsearchStore
 
 try:
     import config
@@ -25,7 +25,7 @@ except ModuleNotFoundError:
     import summarizer.config as config
 
 
-class TopicRetriever(BaseRetriever):
+class ChromaTopicRetriever(BaseRetriever):
     topic_client: API
     article_client: API
     topic_collection: str
@@ -46,6 +46,18 @@ class TopicRetriever(BaseRetriever):
             for chunk, meta in zip(topic_qresults["documents"][0], topic_qresults["metadatas"][0]):
                 results.append(Document(page_content=chunk, metadata=meta))
         return results
+
+
+class ElasticSearchTopicRetriever(BaseRetriever):
+
+    topic_elasticstore: ElasticsearchStore
+    chunks_elasticstore: ElasticsearchStore
+    topic_k: int = config.TOPIC_K
+    chunk_k: int = config.ARTICLE_K
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
+        topic_results = self.topic_elasticstore.similarity_search(query, k=self.topic_k)
+        pass
 
 
 class ChainRetriever(BaseRetriever):
@@ -105,10 +117,10 @@ if __name__ == "__main__":
     chroma = chromadb.PersistentClient(path="topics/topic_indices/topic-2023-4")
     chroma_articles = chromadb.PersistentClient(path="topics/topic_indices/articles-2023-4")
     chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.TOPIC_EMBEDDING)
-    topic_retriever = TopicRetriever(topic_client=chroma, article_client=chroma_articles,
-                                     topic_collection=config.TOPIC_COLLECTION,
-                                     doc_collection=config.ARTICLE_COLLECTION,
-                                     embedding=chroma_embed)
+    topic_retriever = ChromaTopicRetriever(topic_client=chroma, article_client=chroma_articles,
+                                           topic_collection=config.TOPIC_COLLECTION,
+                                           doc_collection=config.ARTICLE_COLLECTION,
+                                           embedding=chroma_embed)
 
     plan_llm = ChatVertexAI(
         temperature=0,
