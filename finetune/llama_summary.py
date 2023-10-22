@@ -121,7 +121,7 @@ def main():
         tokenizer=tokenizer,
     )
     raw_datasets = DatasetDict({
-        "train": train_data
+        "train": dataset
     })
 
     # preparing data collator
@@ -151,7 +151,7 @@ def main():
 
     # creating trainer
     trainer = Trainer(
-        model=model, args=train_args, train_dataset=dataset, data_collator=collator
+        model=model, args=train_args, train_dataset=raw_datasets["train"], data_collator=collator
     )
     # trainer.accelerator.print(f"{trainer.model}")
     trainer.model.print_trainable_parameters()
