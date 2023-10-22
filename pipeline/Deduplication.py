@@ -1,18 +1,9 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[9]:
-
-
 import pandas as pd
 import re, hashlib, math, time
 import networkx as nx
 from random import randint, seed
 import config
 seed(1631996)
-
-
-# In[10]:
 
 
 class hashFamily:
@@ -25,10 +16,6 @@ class hashFamily:
         return int(hashlib.sha1(str(el_to_hash).encode('utf-8') + self.salt.encode('utf-8')).hexdigest()[-self.resultSize:], 16)
    
 
-
-# In[11]:
-
-
 class shingler:
     def __init__(self, k):
         
@@ -40,13 +27,6 @@ class shingler:
     #inner class utility
     def process_doc(self, document):
         return re.sub("( )+|(\n)+"," ",document).lower()
-    
-    '''def get_shingles(self, document):
-        shingles = set()
-        document= self.process_doc(document)
-        for i in range(0, len(document)-self.k+1 ):
-            shingles.add(document[i:i+self.k])
-        return shingles'''
     
     def get_shingles(self, document):
         shingles = set()
@@ -65,10 +45,6 @@ class shingler:
         hash_function = hashFamily(0)
         return sorted( {hash_function.get_hash_value(s) for s in shingles_set} )
         
-
-
-# In[12]:
-
 
 class minhashSigner:
     def __init__(self, sig_size):
@@ -99,10 +75,6 @@ class minhashSigner:
             
         return signatures
  
-
-
-# In[13]:
-
 
 class lsh:
     def __init__(self, threshold=0.8):
@@ -187,9 +159,6 @@ class lsh:
         return similar_docs #return all the similar signatures that respect the threshold
 
 
-# In[16]:
-
-
 def remove_duplicate_nodes(lsh_similar_itemset):
     # Create the graph (as in the previous example)
     G = nx.Graph()
@@ -213,9 +182,6 @@ def remove_duplicate_nodes(lsh_similar_itemset):
     G.remove_nodes_from(nodes_to_remove)
     
     return nodes_to_remove
-
-
-# In[17]:
 
 
 if __name__ == "__main__":
