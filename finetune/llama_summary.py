@@ -22,9 +22,10 @@ class ScriptArguments:
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
+    model_max_length: Optional[int] = field(default=2048)
     eval_size: Optional[float] = field(default=1000)
-    lora_target: Optional[List[str]] = ("q_proj", "k_proj", "v_proj")
-    cache_dir: Optional[str] = "./transformers"
+    lora_target: Optional[List[str]] = field(default=("q_proj", "k_proj", "v_proj"))
+    cache_dir: Optional[str] = field(default="./transformers")
     lora_r: Optional[int] = field(default=32)
     lora_alpha: Optional[int] = field(default=32)
     lora_dropout: Optional[float] = field(default=0.10)
@@ -95,7 +96,7 @@ def main():
     with open(script_args.token_path, "r") as fp:
         hf_token = fp.read().strip()
 
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token, model_max_length=4096)
+    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token, model_max_length=script_args.model_max_length)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
@@ -121,8 +122,7 @@ def main():
     # loading the base model
     model = AutoModelForCausalLM.from_pretrained(
         script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-        torch_dtype=torch.bfloat16, use_flash_attention_2=True, neftune_noise_alpha=5
-    )
+        torch_dtype=torch.bfloat16, use_flash_attention_2=True)
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
@@ -132,9 +132,9 @@ def main():
     collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
     trainer = SFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_prompt,
+        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_example,
         data_collator=collator,
-        max_seq_length=4096, peft_config=peft_config, packing=False
+        max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
     # trainer.accelerator.print(f"{trainer.model}")
     trainer.model.print_trainable_parameters()
@@ -144,9 +144,16 @@ def main():
 
     # save model on main process
     trainer.accelerator.wait_for_everyone()
+    state_dict = trainer.accelerator.get_state_dict(trainer.deepspeed)
+    unwrapped_model = trainer.accelerator.unwrap_model(trainer.deepspeed)
+    if trainer.accelerator.is_main_process:
+        unwrapped_model.save_pretrained(train_args.output_dir, state_dict=state_dict)
+    trainer.accelerator.wait_for_everyone()
+
     # save everything else on main process
     if trainer.args.process_index == 0:
-        trainer.save_model()
+        trainer.model.save_pretrained(train_args.output_dir, safe_serialization=True)
+        tokenizer.save_pretrained(train_args.output_dir)
 
 
 if __name__ == "__main__":
