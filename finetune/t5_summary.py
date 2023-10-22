@@ -77,7 +77,7 @@ if __name__ == "__main__":
         warmup_steps=WARM_UP,
         predict_with_generate=True,
         save_strategy="epoch",
-        deepspeed="deepsp.json",
+        deepspeed="deepspeed_t5.json",
         bf16=True,
         generation_config=config,
         seed=93

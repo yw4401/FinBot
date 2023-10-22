@@ -1,6 +1,4 @@
 # AI Assisted Labeling
-import re
-
 LABEL_REINFORCEMENT = "Good. "
 LABEL_MAX_TOKEN = 1024 * 7
 LABEL_VERBOSE = False
@@ -29,3 +27,12 @@ FIQA_SYSTEM = "You are a helpful AI assistant that will re-phrase given text int
 FIQA_USER = "{input_text}"
 FIQA_MODEL = "gpt-3.5-turbo-16k"
 FIQA_TEMPERATURE = 0
+
+# Finetuning Parameters
+LLAMA_SUMMARY_BULLET_INSTRUCTION = "Summarize the key-points from the given context. " \
+                                   "The information in the summary should include, " \
+                                   "but should not be limited to information that can help answer the given question."
+LLAMA_SUMMARY_PARA_INSTRUCTION = "Summarize the given context. " \
+                                 "The information in the summary should include, " \
+                                 "but should not be limited to information that can help answer the given question."
+LLAMA_SUMMARY_MAX_INPUT_TOKEN = 3840

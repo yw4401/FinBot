@@ -138,7 +138,7 @@ if __name__ == "__main__":
         max_output_tokens=512
     )
 
-    query = "Which companies are developing drugs that are currently in the process of approval?"
+    query = "Which companies are developing drugs that are currently in the process of approval or just got approved?"
     agg_chain = topic_aggregate_chain(plan_llm, retriever, return_source_documents=True, verbose=True)
     test_result = agg_chain(query)
     print(test_result["result"].strip())

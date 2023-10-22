@@ -17,34 +17,13 @@ import joblib
 import google.cloud.storage as storage
 
 import config
-from select_data import load_subsample_index
-
-prefix_bullets = "context: {body}\n\nquestion: {question}\n\nsummarize the key-points related to the question: "
-prefix_plain = "context: {body}\n\nquestion: {question}\n\nsummarize the content related to the question: "
+from select_data_2 import load_subsample_index
 
 
 class AugmentedOutput(BaseModel):
 
     answerable: str = Field(description="The answerable question", default="FAILED")
     unanswerable: str = Field(description="The unanswerable question", default="FAILED")
-
-
-def create_positive(row):
-    if row["summary_type"] == "BULLETS":
-        return prefix_bullets.format(body=row["body"], question=row["question"]), row["summary"]
-    elif row["summary_type"] == "PLAIN":
-        return prefix_plain.format(body=row["body"], question=row["question"]), row["summary"]
-    else:
-        raise ValueError("Type")
-
-
-def create_negative(row):
-    if row["summary_type"] == "BULLETS":
-        return prefix_bullets.format(body=row["body"], question=row["reverse_question"]), "IMPOSSIBLE"
-    elif row["summary_type"] == "PLAIN":
-        return prefix_plain.format(body=row["body"], question=row["reverse_question"]), "IMPOSSIBLE"
-    else:
-        raise ValueError("Type")
 
 
 def create_summary_aug_chain(llm):
@@ -118,21 +97,21 @@ def get_data_sets_df(sample_df, test_instances=1000):
 
     body = []
     summary = []
+    question = []
     pos = []
     for i, row in sample_df.iterrows():
-        body_pos, sum_pos = create_positive(row)
-        body_neg, sum_neg = create_negative(row)
-        body.extend([body_pos, body_neg])
-        summary.extend([sum_pos, sum_neg])
+        body.extend([row["body"], row["body"]])
+        summary.extend([row["summary"], "Impossible to answer with given information"])
         pos.extend([True, False])
     result_df = pd.DataFrame({
         "body": body,
+        "question": question,
         "summary": summary,
         "pos": pos
     })
 
     train_df, test_df = train_test_split(result_df, test_size=test_instances, stratify=result_df.pos)
-    return train_df[["body", "summary"]], test_df[["body", "summary"]]
+    return train_df[["body", "question", "summary"]], test_df[["body", "question", "summary"]]
 
 
 if __name__ == "__main__":
@@ -148,7 +127,7 @@ if __name__ == "__main__":
             progress.update(1)
 
     df = pd.concat(articles, ignore_index=True)
-    df = df.loc[df.summary_type != "NULL"]
+    df = df.loc[df.summary_type == "BULLETS"]
     df = df.drop_duplicates(subset=["body"])
     df = augment_summary(df)
     print(df.head())
