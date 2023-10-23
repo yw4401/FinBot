@@ -26,9 +26,9 @@ class ScriptArguments:
     eval_size: Optional[float] = field(default=1000)
     lora_target: Optional[List[str]] = field(default=("q_proj", "k_proj", "v_proj"))
     cache_dir: Optional[str] = field(default="./transformers")
-    lora_r: Optional[int] = field(default=32)
-    lora_alpha: Optional[int] = field(default=32)
-    lora_dropout: Optional[float] = field(default=0.10)
+    lora_r: Optional[int] = field(default=16)
+    lora_alpha: Optional[int] = field(default=16)
+    lora_dropout: Optional[float] = field(default=0.05)
 
 
 B_INST, E_INST = "[INST]", "[/INST]"
@@ -82,7 +82,7 @@ def format_example(example):
             {"role": "user", "content": user},
             {"role": "assistant", "content": s}
         ])
-        output_texts.append(text)
+        output_texts.append(text[len("<s>"):-len("</s>")])
 
     return output_texts
 
