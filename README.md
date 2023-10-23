@@ -29,7 +29,8 @@ The Retail Investor News Analysis web application uses large language models and
 - Here, the topic modeling is done using BERTopic.
 
 ### Topic Summarizer
-- The [summarize_topics_6.py](pipeline/summarize_topics_6.py) produces a summary for each topic generated above.
+- The [summarize_topics_6.py](pipeline/summarize_topics_6.py) generates concise and coherent summaries of news articles for each topic. It is designed to extract and condense key information from a set of documents or articles related to a specific topic or subject.
+- Topic summarizers aim to provide users with a quick and informative overview of the most important points within a particular subject area, making it easier to understand and extract insights from a large volume of text. 
 
 ### Finetuning the data
 - ....... 
