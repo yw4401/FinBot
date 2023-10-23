@@ -1,5 +1,7 @@
 # FinBot
 
+*TODO: Add table of content*
+
 ## Project Description
 The FinBot uses large language models and Natural Language Processing (NLP) to analyze news articles and provide insights to retail investors. The application allows users to stay informed about potential hypes and important events by analyzing a specified time period of news articles.
 
@@ -16,13 +18,33 @@ FinBot can enpower the retail investors to have some support in getting key news
 - Automatically extracting relevant metrics from companies based on user interests
 - *TODO: Add more as we develop it further*
 
+## TODO: @Yif Add UI demo video/image/gif once ready
+
 ## Architecture/Tech
 
 ### TODO: Make it more presentable
 
 ![Architecture](images/Subsystems.png)
 
-### Data Ingestion
+### Tech Stack
+
+#### Data Scraping
+- Selenium and/or Requests
+- Yahoo Finance API via yfinance
+
+#### Data Storage
+- GCP Cloud Storage (scraped articles, intermediary results)
+- Elastic Search (Processed topics/article chunks)
+
+#### Model/Deployment
+- HuggingFace
+- Langchain
+- Flask
+
+#### UI
+- Streamlit
+
+### Data Enrichment
 
 #### Web Scraping for Data Collection ([scraper](scraper))
 - We've gathered data from prominent news sources, including CNBC, The New York Times, and Reuters, as part of the data collection phase. The [common.py](scraper/common.py) is a framework that serves as the backbone for the web scraper. It encapsulates the essential functionality of traversing HTML pages by following links, verifying if a URL has already been scraped, and progressing to the subsequent page.
@@ -56,10 +78,51 @@ FinBot can enpower the retail investors to have some support in getting key news
 
 ### Response Generation
 
+The algorithms for handling output is located in the [summarizer](summarizer) directory.
+
 *TODO: Touch Up once done*
 
-#### Question Answering
+#### Retrieval
+- A topic based retrieval strategy is used for QA/Summarization.
+- First, the top T relevant topics are found via a semantic similarity search of user query against topic embedding (summary of topics)
+- Then, for each relevant topics, the top K text chunks from the topic is found via a combined score of full text search (entities, raw text, titles) and chunk embeddings (MMR)
+- While searching, the chunks are constraint according to user specified time-frame
+
+*TODO: Make diagram for algorithm*
+
+#### Generation
+- A custom fine-tuned summary model on the article summaries is used with the retrieved chunks to generate the key-points summaries
+- A model fine-tuned on reading comprehension based free-form QA is used to directly answer the user query
+- Raw text generation is enriched via public metrics such as P/E ratio, Cashflow etc based on entities found in query and generated output
+- *TODO: Add more details once done*
+
 
 ### Model Improvements
-- ....... 
 
+*TODO: Add hyper-parameters and more details on evaluation strategy when model finalizes*
+
+#### Text Embedding
+The [ember-v1](https://huggingface.co/llmrails/ember-v1) model is used as a base for creating the embeddings for retrieval. 
+In order to make it more tailored to retrieving chunks based on questions that a retail investor may ask, the model was 
+fine-tuned on the [FIQA](https://sites.google.com/view/fiqa/home) dataset. The post-finetune results for K=2 and K=3 on the FIQA test set are given below.
+
+| K/Metrics | Accuracy@K | Precision@K | Recall@K | NDCG@K   | MRR@K    | MAP@K    |
+|-----------|------------|-------------|----------|----------|----------|----------|
+| 2         | 0.791667   | 0.710648    | 0.377674 | 0.713267 | 0.756944 | 0.693287 |
+| 3         | 0.828704   | 0.618827    | 0.461880 | 0.698001 | 0.769290 | 0.659422 |
+
+#### Summarization
+The FLAN-T5 models is used as a base for creating key-point summaries. In order to make it generate more text than 
+the pre-training data, and also to produce the format that we requires, the model was fine-tuned on the key-points created by 
+human writer from the scraped articles. The final results are given below.
+
+![Rouge2](images/rouge2.png)
+
+![ChatGPT Rated](images/chat-gpt-rated.png)
+
+#### Question Answering
+@Shefali, @Takuma Add once done
+
+## Future Work
+
+*TODO: See how far we get*
