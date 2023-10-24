@@ -69,8 +69,8 @@ def convert_reuters(reuter_dict):
     category = reuter_dict["subsection"]
     if len(title) < len(category):
         title, category = category, title
-    date_time_string = "2023-10-24T12:39:47Z"
-    published = datetime.datetime.strptime(date_time_string, reuter_dict["published"].strip())
+    format_string = "%Y-%m-%dT%H:%M:%SZ"
+    published = datetime.datetime.strptime(reuter_dict["published"].strip(), format_string)
 
     body = ""
     for b in reuter_dict["body"].split("\n\n"):
