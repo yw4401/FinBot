@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 
 from unstructured.partition.html import partition_html
@@ -15,33 +16,20 @@ LINKS_XPATH = "//a"
 
 @extractor_func(scraper="reuters", required=True)
 def extract_article_section(root, output):
-    sub_sect = root.xpath("//h1[@data-testid='Heading']")[0]
-    output["subsection"] = sub_sect.text_content().strip()
+    sub_sect = root.xpath('//meta[@name="article:section"]')[0]
+    output["subsection"] = sub_sect.attrib["content"].strip()
 
 
 @extractor_func(scraper="reuters", required=True)
 def extract_article_title(root, output):
-    header_tag = root.xpath('//span[contains(@class,"heading__heading_4")]')[0]
-    output["title"] = header_tag.text_content().strip()
+    header_tag = root.xpath('//meta[@property="og:title"]')[0]
+    output["title"] = header_tag.attrib["content"].strip()
 
 
 @extractor_func(scraper="reuters", required=True)
 def extract_published_time(root, output):
-    # Find the `time` element with the class 'article-header__dateline__4jE04'
-    time_tag = root.xpath('//time[contains(@class, "article-header__dateline")]')[0]
-
-    # Extract the text content of each 'span' element within the 'time' element
-    for span_tag in time_tag.xpath('./span'):
-        if 'Last Updated' not in span_tag.text_content():
-            if 'AM' in span_tag.text_content() or 'PM' in span_tag.text_content():
-                time_text = span_tag.text_content().strip().replace('UTC', '')
-            else:
-                date_text = span_tag.text_content().strip()
-
-    # Concatenate date and time information and print
-    datetime_str = date_text + ' ' + time_text
-
-    output["published"] = datetime_str
+    time_tag = root.xpath('//meta[@name="article:published_time"]')[0]
+    output["published"] = time_tag.attrib["content"].strip()
 
 
 @extractor_func(scraper="reuters", required=False)
@@ -74,10 +62,40 @@ def extract_body(root, output):
     output["body"] = body
 
 
+@consolidate_func(scraper="reuters")
+def convert_reuters(reuter_dict):
+    title = reuter_dict["title"]
+    category = reuter_dict["subsection"]
+    if len(title) < len(category):
+        title, category = category, title
+    published = datetime.datetime.fromisoformat(reuter_dict["published"].strip())
+
+    body = ""
+    for b in reuter_dict["body"].split("\n\n"):
+        body = body + normalize_text(b) + "\n\n"
+    body = body.strip()
+
+    summary = ""
+    summary_type = SummaryType.NULL
+    if "summary" in reuter_dict:
+        sum_list = reuter_dict["summary"].split("\n\n")
+        summary, summary_type = consolidate_summary(sum_list)
+
+    return Article(
+        source=reuter_dict["source"],
+        html=reuter_dict["html"],
+        url=reuter_dict["url"],
+        category=category,
+        title=title,
+        published=published,
+        body=body,
+        summary=summary,
+        summary_type=summary_type.name
+    )
+
+
 def create_new_state(credential_path=None):
-    writer = GCPBucketDirectoryWriter(bucket="reuters-articles",
-                                      credential_path=credential_path
-                                      )
+    writer = BigQueryWriter(project=GCP_PROJECT)
     with writer:
         tracker = InMemProgressTracker(starting_set=[BASE_URL],
                                        visited=writer.saved_pages,
@@ -90,12 +108,10 @@ def create_new_state(credential_path=None):
 RESET_TIME = 3600 * 24
 
 if __name__ == "__main__":
-    # credentials = "/home/sdai/.config/gcloud/application_default_credentials.json"
-    # auto_credentials, project_id = google.auth.default()
-
     log_client = google.cloud.logging.Client(project="msca310019-capstone-f945")
     log_client.setup_logging()
     logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
     writer, tracker, getter = create_new_state()
     last_reset = time.time()

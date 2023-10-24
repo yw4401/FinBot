@@ -1,12 +1,20 @@
+import datetime
 import time
 import json
+from abc import ABC, abstractmethod
+from enum import Enum
+
 import requests
 import re
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+
+import google.cloud.bigquery as bq
+import google.cloud.bigquery.dbapi as bqapi
+from google.oauth2 import service_account
 from lxml.html import fromstring
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, closing
 import os
 from pathlib import Path
 from types import TracebackType
@@ -17,12 +25,26 @@ from random import randint
 from google.cloud import storage
 import logging
 
+from pydantic import BaseModel, Field
 
 ua = UserAgent()
 registered_extractors = {}
-
+consolidator = {}
 
 LINKS_XPATH = "//a"
+GCP_PROJECT = "msca310019-capstone-f945"
+
+
+class Article(BaseModel):
+    url: str
+    source: str
+    category: str
+    title: str
+    published: datetime.datetime
+    body: str
+    summary: str
+    summary_type: str
+    html: str = None
 
 
 def extractor_func(scraper, required=False):
@@ -43,6 +65,22 @@ def extractor_func(scraper, required=False):
         return func
 
     return extractor_decorator
+
+
+def consolidate_func(scraper):
+    """
+    Registers an extractor for a given scraper. The extractor will be used to fill the output dictionary when
+    the start_scraper function is called.
+    :param scraper: the name of the scraper
+    :param required: whether the page should still be processed when this extractor fails
+    :return: the registered extractor function
+    """
+
+    def consolidate_decorator(func):
+        consolidator[scraper] = func
+        return func
+
+    return consolidate_decorator
 
 
 def start_scraper(scraper, progressor, writer, getter=None, delay=1, duration=float("inf")):
@@ -70,7 +108,7 @@ def start_scraper(scraper, progressor, writer, getter=None, delay=1, duration=fl
             extractors = []
             if scraper in registered_extractors:
                 extractors = registered_extractors[scraper]
-            output_dict = {"url": url, "source": source}
+            output_dict = {"url": url, "html": source, "source": scraper}
             write = True
             for ext in extractors:
                 required = ext["required"]
@@ -78,12 +116,19 @@ def start_scraper(scraper, progressor, writer, getter=None, delay=1, duration=fl
                     func = ext["method"]
                     func(root, output_dict)
                 except Exception as e:
-                    logging.info("Failed to Extract %s: %s" %(url, str(e)))
+                    logging.info("Failed to Extract %s: %s" % (url, str(e)))
                     if required:
                         write = False
                     break
             if write:
-                writer.save(output_dict)
+                try:
+                    if scraper in consolidator:
+                        output_dict = consolidator[scraper](output_dict)
+                    else:
+                        output_dict = Article(**output_dict)
+                    writer.save(output_dict)
+                except Exception as e:
+                    logging.info("Failed to Write %s: %s" % (url, str(e)))
             if time.time() - start_time >= duration:
                 break
 
@@ -140,6 +185,34 @@ def get_links(root, base_url):
         url = normalize_url(l["href"], base_url)
         result_set.add(url)
     return result_set
+
+
+class SummaryType(Enum):
+    NULL = 0,
+    BULLETS = 1,
+    PLAIN = 2
+
+
+def normalize_text(text):
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def consolidate_summary(summary_list):
+    summary = ""
+    summary_type = SummaryType.NULL
+
+    if len(summary_list) == 1:
+        summary = normalize_text(summary_list[0])
+        if len(summary) > 0:
+            summary_type = SummaryType.PLAIN
+    else:
+        for s in summary_list:
+            if s.strip() == "":
+                continue
+            summary = summary + "* " + normalize_text(s) + "\n"
+        summary = summary.strip()
+        summary_type = SummaryType.BULLETS
+    return summary, summary_type
 
 
 class RequestGetter:
@@ -233,14 +306,14 @@ class JSONFileDirectoryWriter(AbstractContextManager):
         self.counter = -1
         self._saved_pages = set()
 
-    def save(self, output):
+    def save(self, output: Article):
         self.check_directory()
         if self.counter == -1:
             self.load()
         with open(Path(self.directory, str(self.counter) + ".json"), "w") as fp:
-            json.dump(output, fp)
+            json.dump(output.model_dump(), fp)
             self.counter = self.counter + 1
-            self._saved_pages.add(output["url"])
+            self._saved_pages.add(output.url)
 
     @property
     def saved_pages(self):
@@ -297,17 +370,17 @@ class GCPBucketDirectoryWriter(AbstractContextManager):
             self.load()
         return set(self._saved_pages)
 
-    def save(self, output):
+    def save(self, output: Article):
         self.check_bucket()
         if self.counter == -1:
             self.load()
         bucket = self.client.bucket(self.bucket)
         name = "%s.json" % self.counter
         with bucket.blob(name).open("w") as fp:
-            json.dump(output, fp)
+            json.dump(output.model_dump(), fp)
             self.counter = self.counter + 1
             logging.info("Saved scraped article to %s, New counter: %s" % (name, self.counter))
-            self._saved_pages.add(output["url"])
+            self._saved_pages.add(output.url)
 
     def write_index(self):
         self.check_bucket()
@@ -348,6 +421,73 @@ class GCPBucketDirectoryWriter(AbstractContextManager):
         bucket_set = set([b.name for b in buckets])
         if self.bucket not in bucket_set:
             raise ValueError("Invalid bucket")
+
+
+class DBAPIWriter(AbstractContextManager, ABC):
+
+    def __init__(self, flush=4, ds_name="Articles", table="ScrapedArticles"):
+        self._saved_pages = set()
+        self._write_buffer = list()
+        self.ds_name = ds_name
+        self.table = table
+        self.flush = flush
+
+    def save(self, output: Article):
+        if len(self._write_buffer) < self.flush:
+            self._write_buffer.append(output)
+        else:
+            self._write_buffer.append(output)
+            with closing(self.connection.cursor()) as cursor:
+                params = [(o.url, o.source, o.title, o.published,
+                           o.body, o.summary, o.summary_type, o.category, o.html) for o in self._write_buffer]
+                cursor.executemany(self._insert_doc(), params)
+                self.connection.commit()
+                self._write_buffer.clear()
+
+    @property
+    def saved_pages(self):
+        with closing(self.connection.cursor()) as cursor:
+            cursor.execute(f"SELECT url FROM {self.ds_name}.{self.table}")
+            return {x[0] for x in cursor.fetchall()}
+
+    @property
+    @abstractmethod
+    def connection(self):
+        raise NotImplementedError()
+
+    def load(self):
+        pass
+
+    def write_index(self):
+        pass
+
+    def _insert_doc(self):
+        return f"""BEGIN TRANSACTION;
+        INSERT INTO {self.ds_name}.{self.table} SELECT MAX(id) + 1, %s, %s, %s, %s, %s, %s, %s, %s, %s FROM {self.ds_name}.{self.table};
+        COMMIT TRANSACTION;
+        """
+
+
+class BigQueryWriter(DBAPIWriter):
+
+    def __init__(self, project: str, credentials: service_account.Credentials = None, **kwargs):
+        DBAPIWriter.__init__(self, **kwargs)
+        self.client = bq.Client(project=project, credentials=credentials)
+        self._connection = None
+
+    @property
+    def connection(self):
+        if not self._connection:
+            raise AssertionError("Not in context")
+        return self._connection
+
+    def __enter__(self):
+        self._connection = bqapi.Connection(client=self.client)
+
+    def __exit__(self, __exc_type: Type[BaseException] | None, __exc_value: BaseException | None,
+                 __traceback: TracebackType | None) -> bool | None:
+        self._connection.close()
+        self._connection = None
 
 
 class InMemProgressTracker:
@@ -407,13 +547,9 @@ def create_robot_filter(base_url):
 
 
 def create_regex_filter(regex):
-
     pattern = re.compile(regex)
 
     def pruner(url):
         return pattern.match(url)
 
     return pruner
-
-
-
