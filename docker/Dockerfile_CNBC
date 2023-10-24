@@ -1,11 +1,12 @@
-FROM python:3-bullseye
+FROM python:3.10.13-bullseye
 
 ENV PYTHONUNBUFFERED True
 ENV APP_HOME /FinBot
 WORKDIR $APP_HOME
 
 COPY ./scraper/common.py ./scraper/cnbc_requests.py ./
-RUN pip install unstructured lxml nltk schedule fake-useragent beautifulsoup4 requests pyarrow google-cloud-storage google-cloud-logging google-cloud-bigquery pydantic google-cloud-bigquery-storage
+RUN apt-get update && apt-get install cmake gcc g++ build-essential cmake python3-dev python3-arrow -y
+RUN pip install unstructured lxml nltk schedule fake-useragent beautifulsoup4 requests google-cloud-storage google-cloud-logging google-cloud-bigquery pyarrow pydantic google-cloud-bigquery-storage
 
 RUN python -c "import unstructured"
 
