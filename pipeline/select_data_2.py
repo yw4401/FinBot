@@ -3,7 +3,10 @@ from functools import reduce
 import pandas as pd
 from google.cloud import storage
 from datetime import datetime
-import config
+try:
+    import config
+except ModuleNotFoundError:
+    import pipeline.config as config
 from contextlib import closing
 from multiprocessing import cpu_count
 import json

@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 
 from unstructured.partition.html import partition_html
@@ -12,6 +13,7 @@ import google.auth
 
 BASE_URL = "https://www.cnbc.com"
 LINKS_XPATH = "//a"
+ARTICLE_CONVERT_CNBC_DATE = "%Y-%m-%dT%H:%M:%S%z"
 
 
 @extractor_func(scraper="cnbc", required=True)
@@ -69,10 +71,40 @@ def extract_body(root, output):
     output["body"] = result
 
 
+@consolidate_func(scraper="cnbc")
+def convert_cnbc(cnbc_dict):
+    title = cnbc_dict["title"]
+    category = cnbc_dict["subsection"]
+    published = datetime.datetime.strptime(cnbc_dict["published"], ARTICLE_CONVERT_CNBC_DATE)
+
+    body = ""
+    for d in cnbc_dict["body"]:
+        if d["type"] == "Title":
+            body = body + "## " + normalize_text(d["text"]) + "\n\n"
+        if d["type"] == "NarrativeText":
+            body = body + normalize_text(d["text"]) + "\n\n"
+    body = body.strip()
+
+    summary = ""
+    summary_type = SummaryType.NULL
+    if "summary" in cnbc_dict:
+        sum_list = cnbc_dict["summary"]
+        summary, summary_type = consolidate_summary(sum_list)
+    return Article(
+        source=cnbc_dict["source"],
+        html=cnbc_dict["html"],
+        url=cnbc_dict["url"],
+        category=category,
+        title=title,
+        published=published,
+        body=body,
+        summary=summary,
+        summary_type=summary_type.name
+    )
+
+
 def create_new_state(credential_path=None):
-    writer = GCPBucketDirectoryWriter(bucket="cnbc-articles",
-                                      credential_path=credential_path
-                                      )
+    writer = BigQueryWriter(project=GCP_PROJECT)
     with writer:
         tracker = InMemProgressTracker(starting_set=[BASE_URL],
                                        visited=writer.saved_pages,
@@ -86,9 +118,10 @@ RESET_TIME = 3600 * 24
 
 
 if __name__ == "__main__":
-    log_client = google.cloud.logging.Client(project="msca310019-capstone-f945")
+    log_client = google.cloud.logging.Client(project=GCP_PROJECT)
     log_client.setup_logging()
     logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
     writer, tracker, getter = create_new_state()
     last_reset = time.time()
