@@ -9,11 +9,11 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    HfArgumentParser,
+    HfArgumentParser, LlamaTokenizer,
 )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 
-import config
+from common import format_summary_example, truncate_summary_example
 
 
 @dataclass
@@ -31,62 +31,6 @@ class ScriptArguments:
     lora_dropout: Optional[float] = field(default=0.05)
 
 
-B_INST, E_INST = "[INST]", "[/INST]"
-B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-
-SPECIAL_TAGS = [B_INST, E_INST, "<<SYS>>", "<</SYS>>"]
-UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
-
-
-def format_prompt(examples):
-    if examples[0]["role"] == "system":
-        examples = [
-                       {
-                           "role": examples[1]["role"],
-                           "content": B_SYS
-                                      + examples[0]["content"]
-                                      + E_SYS
-                                      + examples[1]["content"],
-                       }
-                   ] + examples[2:]
-    assert all([msg["role"] == "user" for msg in examples[::2]]) and all(
-        [msg["role"] == "assistant" for msg in examples[1::2]]
-    ), (
-        "model only supports 'system', 'user' and 'assistant' roles, "
-        "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-    )
-    dialog_texts: List[str] = [
-        f"<s>{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} </s>"
-        for prompt, answer in zip(
-            examples[::2],
-            examples[1::2],
-        )
-    ]
-    return "".join(dialog_texts)
-
-
-def format_example(example):
-    q_header = "### Question"
-    c_header = "### Context"
-    s_header = "### Summary\n"
-
-    output_texts = []
-    for i in range(len(example['body'])):
-        q = example["question"][i]
-        c = example["body"][i]
-        s = s_header + example["summary"][i]
-
-        user = f"{q_header}\n{q}\n\n{c_header}\n{c}"
-        text = format_prompt([
-            {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
-            {"role": "user", "content": user},
-            {"role": "assistant", "content": s}
-        ])
-        output_texts.append(text[len("<s>"):-len("</s>")])
-
-    return output_texts
-
-
 def main():
     parser = HfArgumentParser([TrainingArguments, ScriptArguments])
     train_args, script_args = parser.parse_args_into_dataclasses()
@@ -96,12 +40,17 @@ def main():
     with open(script_args.token_path, "r") as fp:
         hf_token = fp.read().strip()
 
-    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token, model_max_length=script_args.model_max_length)
+    tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token,
+                                              model_max_length=script_args.model_max_length)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
     # loading and prepare dataset
     train_df = pd.read_parquet("fine-tune-summary-train.parquet").sample(n=script_args.sample, random_state=93)
+    train_df["body"] = train_df.apply(lambda row: truncate_summary_example(row["question"],
+                                                                           row["body"],
+                                                                           row["summary"], tokenizer,
+                                                                           script_args.model_max_length), axis=1)
     print(train_df.head())
     print(train_df.summary.iloc[0])
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
@@ -132,7 +81,7 @@ def main():
     collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
     trainer = SFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_example,
+        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_summary_example,
         data_collator=collator,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )

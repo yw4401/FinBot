@@ -36,3 +36,6 @@ LLAMA_SUMMARY_PARA_INSTRUCTION = "Summarize the given context. " \
                                  "The information in the summary should include, " \
                                  "but should not be limited to information that can help answer the given question."
 LLAMA_SUMMARY_MAX_INPUT_TOKEN = 3840
+LLAMA_Q_HEADER = "### Question"
+LLAMA_C_HEADER = "### Context"
+LLAMA_S_HEADER = "### Summary\n"

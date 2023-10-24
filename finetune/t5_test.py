@@ -16,18 +16,7 @@ import torch
 from tqdm import tqdm
 from transformers.models.t5.modeling_t5 import T5Block
 
-
-class ListDataset(torch.utils.data.Dataset):
-    
-    def __init__(self, original_list):
-        self.original_list = original_list
-
-    def __len__(self):
-        return len(self.original_list)
-
-    def __getitem__(self, i):
-        return self.original_list[i]
-
+from finetune.common import ListDataset
 
 if __name__ == "__main__":
     test_df = pd.read_parquet("fine-tune-summary-test.parquet")
