@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[5]:
+# In[6]:
 
 
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
-#import summarizer.ner as ner
+import summarizer.ner as ner
 
 def fetch_data(ticker_symbol, period="1y"):
     
@@ -86,10 +86,13 @@ def plot_data(data, ticker_symbol, summary, kpis):
 def main():
     st.title("Response")
     
-    ticker_symbol = st.text_input("Enter the ticker symbol (e.g., MSFT):", "MSFT").upper()
+    user_text = st.text_input("Enter your question here:")
+    
+#   ticker_symbol = st.text_input("Enter the ticker symbol (e.g., MSFT):", "MSFT").upper()
     period = st.selectbox("Select the period:", ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"])
     
-    if st.button("Fetch Data"):
+    if st.button("Fetch Data") and len(user_text.strip()) > 0:
+        ticker_symbol = ner.extract_company_ticker(user_text)
         data, summary, kpis = fetch_data(ticker_symbol, period)
         plot_data(data, ticker_symbol, summary, kpis)
         
@@ -98,6 +101,7 @@ def main():
 if __name__ == "__main__":
     main()
     
+
 
 # In[ ]:
 
