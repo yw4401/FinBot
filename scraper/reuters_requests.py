@@ -71,6 +71,7 @@ def convert_reuters(reuter_dict):
         title, category = category, title
     format_string = "%Y-%m-%dT%H:%M:%SZ"
     published = datetime.datetime.strptime(reuter_dict["published"].strip(), format_string)
+    published = published.replace(tzinfo=datetime.timezone.utc)
 
     body = ""
     for b in reuter_dict["body"].split("\n\n"):
