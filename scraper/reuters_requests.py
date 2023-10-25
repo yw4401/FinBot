@@ -69,7 +69,8 @@ def convert_reuters(reuter_dict):
     category = reuter_dict["subsection"]
     if len(title) < len(category):
         title, category = category, title
-    format_string = "%Y-%m-%dT%H:%M:%SZ"
+
+    format_string = "%Y-%m-%dT%H:%M:%S.%fZ" if '.' in reuter_dict["published"].strip() else "%Y-%m-%dT%H:%M:%SZ"
     published = datetime.datetime.strptime(reuter_dict["published"].strip(), format_string)
     published = published.replace(tzinfo=datetime.timezone.utc)
 
