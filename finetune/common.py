@@ -1,8 +1,13 @@
+import io
+import json
+import os
+from pathlib import Path
 from typing import List
 
 import torch
+from huggingface_hub import snapshot_download
 from transformers import (
-    LlamaTokenizer,
+    LlamaTokenizer, LlamaTokenizerFast, AutoTokenizer, AutoModelForCausalLM, StoppingCriteria,
 )
 
 import config
@@ -24,11 +29,6 @@ class ListDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, i):
         return self.original_list[i]
-
-
-def token_count(text, tokenizer):
-    tokenized = tokenizer.encode(text, add_special_tokens=False)
-    return len(tokenized)
 
 
 def restrict_article(text, max_token, tokenizer: LlamaTokenizer):
@@ -65,8 +65,27 @@ def format_prompt(examples):
     return "".join(dialog_texts)
 
 
-def truncate_summary_example(question, body, summary, tokenizer, max_context):
-    body_tokens = max_context - token_count(question, tokenizer) - token_count(summary, tokenizer) - 20
+def truncate_summary_example_chat(system, question, body, summary, tokenizer, max_context,
+                                  buffer=20, template=None):
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": format_llama_sum_user(question, "")},
+        {"role": "assistant", "content": format_llama_sum_resp(summary)}
+    ]
+    body_tokens = max_context - len(tokenizer.apply_chat_template(messages, chat_template=template)) - buffer
+    return restrict_article(body, body_tokens, tokenizer)
+
+
+def truncate_summary_example_plain(question, body, summary, tokenizer, max_context,
+                                   input_template=config.PLAIN_INPUT_TEMPLATE,
+                                   output_template=config.PLAIN_OUTPUT_TEMPLATE, seq2seq=True, buffer=20):
+    final_input = input_template.format(body=body, question=question)
+    final_output = output_template.format(summary=summary)
+    if seq2seq:
+        final_text = final_input
+    else:
+        final_text = final_input + "\n" + final_output
+    body_tokens = max_context - len(tokenizer.encode(final_text, add_special_tokens=False)) - buffer
     return restrict_article(body, body_tokens, tokenizer)
 
 
@@ -94,3 +113,129 @@ def format_summary_example(example):
         output_texts.append(text[len("<s>"):-len("</s>")])
 
     return output_texts
+
+
+class StoppingCriteriaSub(StoppingCriteria):
+
+    def __init__(self, stops=()):
+        super().__init__()
+        self.stops = [stop.to("cuda") for stop in stops]
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs):
+        for stop in self.stops:
+            if torch.all((stop == input_ids[0][-len(stop):])).item():
+                return True
+
+        return False
+
+
+class DSPipeline:
+    '''
+    Example helper class for comprehending DeepSpeed Meta Tensors, meant to mimic HF pipelines.
+    The DSPipeline can run with and without meta tensors.
+    '''
+
+    def __init__(self,
+                 model_name='bigscience/bloom-3b',
+                 dtype=torch.float16,
+                 is_meta=True,
+                 device=-1,
+                 checkpoint_path=None,
+                 trust_remote_code=False,
+                 token=None,
+                 model_type=AutoModelForCausalLM
+                 ):
+        self.model_name = model_name
+        self.dtype = dtype
+
+        if isinstance(device, torch.device):
+            self.device = device
+        elif isinstance(device, str):
+            self.device = torch.device(device)
+        elif device < 0:
+            self.device = torch.device("cpu")
+        else:
+            self.device = torch.device(f"cuda:{device}")
+
+        # the Deepspeed team made these so it's super fast to load (~1 minute), rather than wait 10-20min loading time.
+        self.tp_presharded_models = ["microsoft/bloom-deepspeed-inference-int8",
+                                     "microsoft/bloom-deepspeed-inference-fp16"]
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left",
+                                                       trust_remote_code=trust_remote_code, token=token)
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        if is_meta:
+            '''When meta tensors enabled, use checkpoints'''
+            self.repo_root, self.checkpoints_json = self._generate_json(checkpoint_path)
+
+            self.model = model_type.from_pretrained(self.model_name,
+                                                    trust_remote_code=trust_remote_code,
+                                                    low_cpu_mem_usage=True, token=token)
+        else:
+            self.model = model_type.from_pretrained(self.model_name, trust_remote_code=trust_remote_code, token=token)
+
+        self.model.eval()
+
+        if self.dtype == torch.float16:
+            self.model.half()
+
+    def __call__(self,
+                 inputs=("test",), generate_kwargs=None):
+        if generate_kwargs is None:
+            generate_kwargs = {}
+        if isinstance(inputs, str):
+            input_list = [inputs]
+        else:
+            input_list = inputs
+
+        outputs = self.generate_outputs(input_list, generate_kwargs)
+        return outputs
+
+    def _generate_json(self, checkpoint_path=None):
+        if checkpoint_path is None:
+            repo_root = snapshot_download(self.model_name,
+                                          allow_patterns=["*"],
+                                          cache_dir=os.getenv("TRANSFORMERS_CACHE", None),
+                                          ignore_patterns=["*.safetensors"],
+                                          local_files_only=False,
+                                          revision=None)
+        else:
+            assert os.path.exists(checkpoint_path), f"Checkpoint path {checkpoint_path} does not exist"
+            repo_root = checkpoint_path
+
+        if os.path.exists(os.path.join(repo_root, "ds_inference_config.json")):
+            checkpoints_json = os.path.join(repo_root, "ds_inference_config.json")
+        elif self.model_name in self.tp_presharded_models:
+            # tp presharded repos come with their own checkpoints config file
+            checkpoints_json = os.path.join(repo_root, "ds_inference_config.json")
+        else:
+            checkpoints_json = "checkpoints.json"
+
+            with io.open(checkpoints_json, "w", encoding="utf-8") as f:
+                file_list = [str(entry).split('/')[-1] for entry in Path(repo_root).rglob("*.[bp][it][n]") if
+                             entry.is_file()]
+                data = {"type": "BLOOM", "checkpoints": file_list, "version": 1.0}
+                json.dump(data, f)
+
+        return repo_root, checkpoints_json
+
+    def generate_outputs(self, inputs=("test",), generate_kwargs=None):
+        if generate_kwargs is None:
+            generate_kwargs = {}
+        input_tokens = self.tokenizer.batch_encode_plus(inputs, return_tensors="pt", padding=True)
+        for t in input_tokens:
+            if torch.is_tensor(input_tokens[t]):
+                input_tokens[t] = input_tokens[t].to(self.device)
+
+        self.model.cuda().to(self.device)
+
+        if isinstance(self.tokenizer, LlamaTokenizerFast):
+            # NOTE: Check if Llamma can work w/ **input_tokens
+            #       'token_type_ids' kwarg not recognized in Llamma generate function
+            outputs = self.model.generate(input_tokens.input_ids, **generate_kwargs)
+        else:
+            outputs = self.model.generate(**input_tokens, **generate_kwargs)
+        outputs = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+
+        return outputs

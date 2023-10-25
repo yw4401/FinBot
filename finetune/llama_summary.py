@@ -13,7 +13,8 @@ from transformers import (
 )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 
-from common import format_summary_example, truncate_summary_example
+from common import format_summary_example, truncate_summary_example_chat
+import config
 
 
 @dataclass
@@ -47,10 +48,13 @@ def main():
 
     # loading and prepare dataset
     train_df = pd.read_parquet("fine-tune-summary-train.parquet").sample(n=script_args.sample, random_state=93)
-    train_df["body"] = train_df.apply(lambda row: truncate_summary_example(row["question"],
-                                                                           row["body"],
-                                                                           row["summary"], tokenizer,
-                                                                           script_args.model_max_length), axis=1)
+    train_df["body"] = train_df.apply(
+        lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
+                                                  question=row["question"],
+                                                  body=row["body"],
+                                                  summary=row["summary"],
+                                                  tokenizer=tokenizer,
+                                                  max_context=script_args.model_max_length), axis=1)
     print(train_df.head())
     print(train_df.summary.iloc[0])
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
