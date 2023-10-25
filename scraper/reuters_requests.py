@@ -1,3 +1,4 @@
+import datetime
 import logging
 import sys
 import time
@@ -68,7 +69,10 @@ def convert_reuters(reuter_dict):
     category = reuter_dict["subsection"]
     if len(title) < len(category):
         title, category = category, title
-    published = datetime.datetime.fromisoformat(reuter_dict["published"].strip())
+
+    format_string = "%Y-%m-%dT%H:%M:%S.%fZ" if '.' in reuter_dict["published"].strip() else "%Y-%m-%dT%H:%M:%SZ"
+    published = datetime.datetime.strptime(reuter_dict["published"].strip(), format_string)
+    published = published.replace(tzinfo=datetime.timezone.utc)
 
     body = ""
     for b in reuter_dict["body"].split("\n\n"):
