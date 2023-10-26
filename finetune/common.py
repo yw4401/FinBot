@@ -13,12 +13,6 @@ from transformers import (
 
 import config
 
-B_INST, E_INST = "[INST]", "[/INST]"
-B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-
-SPECIAL_TAGS = [B_INST, E_INST, "<<SYS>>", "<</SYS>>"]
-UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
-
 
 class ListDataset(torch.utils.data.Dataset):
 
@@ -37,33 +31,6 @@ def restrict_article(text, max_token, tokenizer: LlamaTokenizer):
     if len(tokenized) > max_token:
         return tokenizer.decode(tokenized[:max_token], skip_special_tokens=False)
     return text
-
-
-def format_prompt(examples):
-    if examples[0]["role"] == "system":
-        examples = [
-                       {
-                           "role": examples[1]["role"],
-                           "content": B_SYS
-                                      + examples[0]["content"]
-                                      + E_SYS
-                                      + examples[1]["content"],
-                       }
-                   ] + examples[2:]
-    assert all([msg["role"] == "user" for msg in examples[::2]]) and all(
-        [msg["role"] == "assistant" for msg in examples[1::2]]
-    ), (
-        "model only supports 'system', 'user' and 'assistant' roles, "
-        "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-    )
-    dialog_texts: List[str] = [
-        f"<s>{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} </s>"
-        for prompt, answer in zip(
-            examples[::2],
-            examples[1::2],
-        )
-    ]
-    return "".join(dialog_texts)
 
 
 def truncate_summary_example_chat(system, question, body, summary, tokenizer, max_context,
@@ -98,7 +65,7 @@ def format_llama_sum_resp(summary):
     return config.LLAMA_S_HEADER + summary
 
 
-def format_summary_example(example):
+def format_summary_example(example, tokenizer, template=None):
     output_texts = []
     for i in range(len(example['body'])):
         q = example["question"][i]
@@ -106,12 +73,13 @@ def format_summary_example(example):
         s = format_llama_sum_resp(example["summary"][i])
 
         user = format_llama_sum_user(q, c)
-        text = format_prompt([
+        text = tokenizer.apply_chat_template([
             {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
             {"role": "user", "content": user},
             {"role": "assistant", "content": s}
-        ])
-        output_texts.append(text[len("<s>"):-len("</s>")])
+        ], tokenize=False, chat_template=template)
+        output_texts.append(text[len("<s>"):])
+        # output_texts.append(text)
 
     return output_texts
 

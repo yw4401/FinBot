@@ -97,7 +97,8 @@ if __name__ == "__main__":
         print(stop_words_ids)
         stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(stops=stop_words_ids)])
     else:
-        stopping_criteria = StoppingCriteriaList([])
+        stopping_criteria = StoppingCriteriaList(
+            [StoppingCriteriaSub(stops=[torch.tensor([pipe.tokenizer.eos_token_id])])])
 
     test_df["body"] = test_df.apply(
         lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
@@ -114,7 +115,7 @@ if __name__ == "__main__":
         parsed = raw_out.replace(config.LLAMA_S_HEADER.strip(), "").strip()
         results.append(parsed)
 
-        if i % 100 == 0:
+        if i % 10 == 0 and local_rank == 0:
             print(parsed)
 
     test_df["predicted"] = results

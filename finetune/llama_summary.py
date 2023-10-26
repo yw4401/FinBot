@@ -19,14 +19,13 @@ import config
 
 @dataclass
 class ScriptArguments:
-    model_path: Optional[str] = field(default="./Llama-2-7b-chat-hf")
+    model_path: Optional[str] = field(default="meta-llama/Llama-2-7b-chat-hf")
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
     model_max_length: Optional[int] = field(default=2048)
     eval_size: Optional[float] = field(default=1000)
     lora_target: Optional[List[str]] = field(default=("q_proj", "k_proj", "v_proj"))
-    cache_dir: Optional[str] = field(default="./transformers")
     lora_r: Optional[int] = field(default=16)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
@@ -85,7 +84,8 @@ def main():
     collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
     trainer = SFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_summary_example,
+        model=model, args=train_args, train_dataset=raw_datasets["train"],
+        formatting_func=lambda x: format_summary_example(x, tokenizer),
         data_collator=collator,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
@@ -97,17 +97,15 @@ def main():
 
     # save model on main process
     trainer.accelerator.wait_for_everyone()
-    state_dict = trainer.accelerator.get_state_dict(trainer.deepspeed)
-    unwrapped_model = trainer.accelerator.unwrap_model(trainer.deepspeed)
     if trainer.accelerator.is_main_process:
-        unwrapped_model.save_pretrained(train_args.output_dir, state_dict=state_dict)
+        trainer.save_model()
     trainer.accelerator.wait_for_everyone()
-
-    # save everything else on main process
-    if trainer.args.process_index == 0:
-        trainer.model.save_pretrained(train_args.output_dir, safe_serialization=True)
-        tokenizer.save_pretrained(train_args.output_dir)
 
 
 if __name__ == "__main__":
-    main()
+    with open("./hf_token", "r") as fp:
+        hf_token = fp.read().strip()
+
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", token=hf_token,
+                                              model_max_length=2048)
+    print(torch.tensor([tokenizer.eos_token_id]))
