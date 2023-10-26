@@ -16,7 +16,7 @@ TOPIC_SUMMARY_INDEX_FILE = "topic-chroma-{year}-{month}.zip"
 
 # Embeddings
 OPENAI_API = "./key"
-FILTER_EMBEDDINGS = "../embeddings"
+FILTER_EMBEDDINGS = "shilongdai/finember"
 TOPIC_COLLECTION = "topics"
 ARTICLE_COLLECTION = "articles"
 
