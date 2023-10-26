@@ -161,6 +161,8 @@ class DSPipeline:
             self.config = AutoConfig.from_pretrained(self.repo_root)
             with OnDevice(dtype=dtype, device="meta", enabled=True):
                 self.model = AutoModelForCausalLM.from_config(self.config, torch_dtype=dtype)
+                # self.model = model_type.from_pretrained(self.repo_root, torch_dtype=dtype,
+                #                                         use_flash_attention_2=True, low_cpu_mem_usage=True, token=token)
             self.model = self.model.eval()
         else:
             self.model = model_type.from_pretrained(self.repo_root, torch_dtype=dtype,
