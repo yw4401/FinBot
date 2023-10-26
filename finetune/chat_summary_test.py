@@ -1,26 +1,18 @@
-import io
-import json
 import os
-import time
-from pathlib import Path
-
-import transformers
-from huggingface_hub import snapshot_download
-from tqdm import tqdm
 from dataclasses import dataclass, field
-from typing import cast, Optional, List
+from typing import cast, Optional
 
 import deepspeed
 import pandas as pd
 import torch
+import transformers
+from tqdm import tqdm
 from transformers import (
-    AutoTokenizer,
-    HfArgumentParser, AutoModelForCausalLM, Conversation, AutoConfig,
-    LlamaTokenizerFast, AutoModel, AutoModelForSeq2SeqLM, StoppingCriteria, StoppingCriteriaList,
+    HfArgumentParser, StoppingCriteriaList,
 )
 
-from common import truncate_summary_example_chat, format_llama_sum_user, DSPipeline, StoppingCriteriaSub
 import config
+from common import truncate_summary_example_chat, format_llama_sum_user, DSPipeline, StoppingCriteriaSub
 
 
 @dataclass
@@ -98,7 +90,7 @@ if __name__ == "__main__":
         stop_words = script_args.stop_criteria.split(",")
         stop_words_ids = [pipe.tokenizer(stop_word, return_tensors='pt')['input_ids'].squeeze() for stop_word in
                           stop_words]
-        stop_words_ids = [torch.reshape(s, (1, )) for s in stop_words_ids if s.dim() == 0]
+        stop_words_ids = [torch.reshape(s, (1,)) for s in stop_words_ids if s.dim() == 0]
         print(stop_words_ids)
         stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(stops=stop_words_ids)])
     else:

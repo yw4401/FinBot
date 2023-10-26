@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import List
 
 import torch
+from deepspeed import OnDevice
 from huggingface_hub import snapshot_download
 from transformers import (
-    LlamaTokenizer, LlamaTokenizerFast, AutoTokenizer, AutoModelForCausalLM, StoppingCriteria,
+    LlamaTokenizer, LlamaTokenizerFast, AutoTokenizer, AutoModelForCausalLM, StoppingCriteria, AutoConfig,
 )
 
 import config
@@ -147,6 +148,7 @@ class DSPipeline:
                  ):
         self.model_name = model_name
         self.dtype = dtype
+        self.token = token
 
         if isinstance(device, torch.device):
             self.device = device
@@ -168,12 +170,12 @@ class DSPipeline:
         if is_meta:
             '''When meta tensors enabled, use checkpoints'''
             self.repo_root, self.checkpoints_json = self._generate_json(checkpoint_path)
-
-            self.model = model_type.from_pretrained(self.model_name,
-                                                    trust_remote_code=trust_remote_code,
-                                                    low_cpu_mem_usage=True, token=token)
+            self.config = AutoConfig.from_pretrained(self.repo_root)
+            with OnDevice(dtype=dtype, device="meta", enabled=True):
+                self.model = AutoModelForCausalLM.from_config(config, torch_dtype=dtype)
+            self.model = self.model.eval()
         else:
-            self.model = model_type.from_pretrained(self.model_name, trust_remote_code=trust_remote_code, token=token)
+            self.model = model_type.from_pretrained(self.repo_root, trust_remote_code=trust_remote_code, token=token)
 
         self.model.eval()
 
@@ -199,26 +201,29 @@ class DSPipeline:
                                           cache_dir=os.getenv("TRANSFORMERS_CACHE", None),
                                           ignore_patterns=["*.safetensors"],
                                           local_files_only=False,
-                                          revision=None)
+                                          revision=None, token=self.token)
         else:
             assert os.path.exists(checkpoint_path), f"Checkpoint path {checkpoint_path} does not exist"
             repo_root = checkpoint_path
 
-        if os.path.exists(os.path.join(repo_root, "ds_inference_config.json")):
-            checkpoints_json = os.path.join(repo_root, "ds_inference_config.json")
-        elif self.model_name in self.tp_presharded_models:
-            # tp presharded repos come with their own checkpoints config file
-            checkpoints_json = os.path.join(repo_root, "ds_inference_config.json")
+        if os.path.isfile(os.path.join(repo_root, "ds_inference_config.json")):
+            with open(os.path.join(repo_root, "ds_inference_config.json")) as f:
+                data = json.load(f)
+            data["base_dir"] = repo_root
+            return data
         else:
-            checkpoints_json = "checkpoints.json"
+            checkpoint_files = [
+                str(entry).split("/")[-1]
+                for entry in Path(repo_root).rglob("*.[bp][it][n]") if entry.is_file()
+            ]
+            data = {
+                "type": "DS_MODEL",
+                "checkpoints": checkpoint_files,
+                "version": 1.0,
+                "base_dir": repo_root,
+            }
 
-            with io.open(checkpoints_json, "w", encoding="utf-8") as f:
-                file_list = [str(entry).split('/')[-1] for entry in Path(repo_root).rglob("*.[bp][it][n]") if
-                             entry.is_file()]
-                data = {"type": "BLOOM", "checkpoints": file_list, "version": 1.0}
-                json.dump(data, f)
-
-        return repo_root, checkpoints_json
+        return repo_root, data
 
     def generate_outputs(self, inputs=("test",), generate_kwargs=None):
         if generate_kwargs is None:
