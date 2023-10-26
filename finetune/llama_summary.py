@@ -30,6 +30,7 @@ class ScriptArguments:
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
     cache_dir: Optional[str] = field(default="./transformers")
+    buffer_len: Optional[str] = field(default=100)
     start_text: Optional[str] = field(default="<|im_start|> assistant")
 
 
@@ -57,7 +58,8 @@ def main():
                                                   body=row["body"],
                                                   summary=row["summary"],
                                                   tokenizer=tokenizer,
-                                                  max_context=script_args.model_max_length), axis=1)
+                                                  max_context=script_args.model_max_length,
+                                                  buffer=script_args.buffer_len), axis=1)
     print(train_df.head())
     print(train_df.summary.iloc[0])
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
@@ -112,5 +114,19 @@ if __name__ == "__main__":
         hf_token = fp.read().strip()
 
     tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", token=hf_token,
-                                              model_max_length=2048)
-    print(torch.tensor([tokenizer.eos_token_id]))
+                                              model_max_length=2048, add_eos_token=True, padding=True)
+    tokenizer.pad_token = tokenizer.eos_token
+    message_example = [
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Who are you"},
+        {"role": "assistant", "content": "A helpful assistant"}
+    ]
+    chat_applied = tokenizer.apply_chat_template(message_example, tokenize=False)
+    text = chat_applied
+    if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+        text = text[len(tokenizer.bos_token):]
+    if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+        text = text[:-len(tokenizer.eos_token)]
+    print(tokenizer("test"))
+    print(chat_applied)
+    print(tokenizer(text))

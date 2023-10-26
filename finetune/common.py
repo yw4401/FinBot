@@ -76,6 +76,10 @@ def format_summary_example(example, tokenizer, template=None):
             {"role": "user", "content": user},
             {"role": "assistant", "content": s}
         ], tokenize=False, chat_template=template)
+        if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+            text = text[len(tokenizer.bos_token):]
+        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+            text = text[:-len(tokenizer.eos_token)]
         output_texts.append(text[len(tokenizer.bos_token):])
         # output_texts.append(text)
 
