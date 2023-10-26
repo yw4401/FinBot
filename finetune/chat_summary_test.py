@@ -84,6 +84,9 @@ if __name__ == "__main__":
                                           dtype=dtype,
                                           replace_with_kernel_inject=script_args.kernel_inject,
                                           max_tokens=script_args.max_input_length + script_args.max_new_tokens,
+                                          tensor_parallel={
+                                              "tp_size": int(world_size)
+                                          },
                                           **ds_kwargs
                                           )
     if script_args.stop_criteria:

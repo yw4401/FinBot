@@ -174,7 +174,6 @@ class DSPipeline:
             with OnDevice(dtype=dtype, device="meta", enabled=True):
                 self.model = AutoModelForCausalLM.from_config(self.config, torch_dtype=dtype)
             self.model = self.model.eval()
-            torch.distributed.barrier()
         else:
             self.model = model_type.from_pretrained(self.repo_root, torch_dtype=dtype,
                                                     trust_remote_code=trust_remote_code, token=token)
