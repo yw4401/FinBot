@@ -39,6 +39,6 @@ LLAMA_SUMMARY_PARA_INSTRUCTION = "Summarize the given context. " \
 LLAMA_SUMMARY_MAX_INPUT_TOKEN = 3840
 LLAMA_Q_HEADER = "### Question"
 LLAMA_C_HEADER = "### Context"
-LLAMA_S_HEADER = "### Summary\n"
+LLAMA_S_TEMPLATE = "### Summary\n{summary}\n### End"
 PLAIN_INPUT_TEMPLATE = "context: {body}\nquestion: {question}\ncreate a summary of the context that includes information related to the question: "
 PLAIN_OUTPUT_TEMPLATE = "{summary}"

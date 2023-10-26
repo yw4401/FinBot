@@ -60,7 +60,7 @@ def format_llama_sum_user(question, body):
 
 
 def format_llama_sum_resp(summary):
-    return config.LLAMA_S_HEADER + summary
+    return config.LLAMA_S_TEMPLATE.format(summary=summary)
 
 
 def format_summary_example(example, tokenizer, template=None):
@@ -80,8 +80,7 @@ def format_summary_example(example, tokenizer, template=None):
             text = text[len(tokenizer.bos_token):]
         if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
             text = text[:-len(tokenizer.eos_token)]
-        output_texts.append(text[len(tokenizer.bos_token):])
-        # output_texts.append(text)
+        output_texts.append(text)
 
     return output_texts
 
@@ -154,6 +153,7 @@ class DSPipeline:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left",
                                                        trust_remote_code=trust_remote_code, token=token)
         self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
         if is_meta:
             '''When meta tensors enabled, use checkpoints'''

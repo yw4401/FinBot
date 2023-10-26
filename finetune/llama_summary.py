@@ -30,7 +30,7 @@ class ScriptArguments:
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
     cache_dir: Optional[str] = field(default="./transformers")
-    buffer_len: Optional[str] = field(default=100)
+    buffer_len: Optional[str] = field(default=20)
     start_text: Optional[str] = field(default="<|im_start|> assistant")
 
 
@@ -46,6 +46,7 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token,
                                               model_max_length=script_args.model_max_length,
+                                              add_eos_token=True,
                                               cache_dir=script_args.cache_dir,
                                               padding_side="right")
     tokenizer.pad_token = tokenizer.eos_token
