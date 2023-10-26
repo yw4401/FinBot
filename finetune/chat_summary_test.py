@@ -93,7 +93,7 @@ if __name__ == "__main__":
         stop_words = script_args.stop_criteria.split(",")
         stop_words_ids = [pipe.tokenizer(stop_word, return_tensors='pt')['input_ids'].squeeze() for stop_word in
                           stop_words]
-        stop_words_ids = [torch.reshape(s, (1,)) for s in stop_words_ids if s.dim() == 0]
+        stop_words_ids = [torch.reshape(s, (1,)) if s.dim() == 0 else s for s in stop_words_ids]
         print(stop_words_ids)
         stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(stops=stop_words_ids)])
     else:
