@@ -172,9 +172,7 @@ class DSPipeline:
             self.repo_root, self.checkpoints_json = self._generate_json(checkpoint_path)
             self.config = AutoConfig.from_pretrained(self.repo_root)
             with OnDevice(dtype=dtype, device="meta", enabled=True):
-                self.model = model_type.from_pretrained(self.repo_root,
-                                                        trust_remote_code=trust_remote_code,
-                                                        low_cpu_mem_usage=True, token=token)
+                self.model = AutoModelForCausalLM.from_config(self.config, torch_dtype=dtype)
             self.model = self.model.eval()
         else:
             self.model = model_type.from_pretrained(self.repo_root, torch_dtype=dtype,
