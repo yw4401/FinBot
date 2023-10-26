@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import summarizer.ner as ner
 import summarizer.uiinterface as ui
 
+
 def fetch_data(ticker_symbol, period="1y"):
     ticker = yf.Ticker(ticker_symbol)
     data = ticker.history(period=period)
