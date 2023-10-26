@@ -172,15 +172,15 @@ class DSPipeline:
             self.repo_root, self.checkpoints_json = self._generate_json(checkpoint_path)
             self.config = AutoConfig.from_pretrained(self.repo_root)
             with OnDevice(dtype=dtype, device="meta", enabled=True):
-                self.model = AutoModelForCausalLM.from_config(config, torch_dtype=dtype)
+                self.model = AutoModelForCausalLM.from_config(self.config, torch_dtype=dtype)
             self.model = self.model.eval()
+            torch.distributed.barrier()
         else:
-            self.model = model_type.from_pretrained(self.repo_root, trust_remote_code=trust_remote_code, token=token)
-
-        self.model.eval()
-
-        if self.dtype == torch.float16:
-            self.model.half()
+            self.model = model_type.from_pretrained(self.repo_root, torch_dtype=dtype,
+                                                    trust_remote_code=trust_remote_code, token=token)
+            self.model.eval()
+            if self.dtype == torch.float16:
+                self.model.half()
 
     def __call__(self,
                  inputs=("test",), generate_kwargs=None):
