@@ -4,7 +4,7 @@ import asyncio
 from langchain.chat_models import ChatVertexAI
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
-from summarizer import config
+import summarizer.config as config
 from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain
 import nest_asyncio
 
@@ -13,7 +13,6 @@ with open(config.ES_KEY_PATH, "r") as fp:
 with open(config.ES_CLOUD_ID_PATH, "r") as fp:
     es_id = fp.read().strip()
 
-nest_asyncio.apply()
 embedding = SentenceTransformerEmbeddings(model_name=config.FILTER_EMBEDDINGS)
 topic_store = ElasticsearchStore(index_name=config.ES_TOPIC_INDEX, embedding=embedding,
                                  es_cloud_id=es_id, es_api_key=es_key,
@@ -32,12 +31,15 @@ plan_llm = ChatVertexAI(
 )
 
 
-async def get_qa_result(query):
+async def answer_question(query):
     qa_agg_chain = topic_aggregate_chain(plan_llm, retriever, return_source_documents=True, verbose=True)
+    return qa_agg_chain(query)
+
+
+async def get_qa_result(query):
     summaries = [{"title": "Main Point", "keypoints": ["K1", "K2", "K3"]},
                  {"title": "Lorem Ipsum", "keypoints": ["K1", "K2", "K3"]}]
-    qa_task = qa_agg_chain.acall(query)
-    completed = await asyncio.gather(qa_task)
+    completed = await asyncio.gather(answer_question(query))
 
     return {
         "qa": completed[0]["result"].strip(),

@@ -17,29 +17,6 @@ except ModuleNotFoundError:
     import summarizer.config as config
 
 
-class ChromaTopicRetriever(BaseRetriever):
-    topic_client: Any
-    article_client: Any
-    topic_collection: str
-    doc_collection: str
-    embedding: Any
-    topic_k: int = config.TOPIC_K
-    chunk_k: int = config.ARTICLE_K
-
-    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        topic_col = self.topic_client.get_or_create_collection(name=self.topic_collection,
-                                                               embedding_function=self.embedding)
-        doc_col = self.article_client.get_or_create_collection(name=self.doc_collection,
-                                                               embedding_function=self.embedding)
-        query_results = topic_col.query(query_texts=[query], n_results=self.topic_k)
-        results = []
-        for topic, _ in zip(query_results["ids"][0], query_results["documents"][0]):
-            topic_qresults = doc_col.query(query_texts=query, where={"topic": int(topic)}, n_results=self.chunk_k)
-            for chunk, meta in zip(topic_qresults["documents"][0], topic_qresults["metadatas"][0]):
-                results.append(Document(page_content=chunk, metadata=meta))
-        return results
-
-
 class ElasticSearchTopicRetriever(BaseRetriever):
     topic_elasticstore: ElasticsearchStore
     chunks_elasticstore: ElasticsearchStore

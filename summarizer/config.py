@@ -23,8 +23,8 @@ TOPIC_COLLECTION = "topics"
 ARTICLE_COLLECTION = "articles"
 
 # Elasticsearch
-ES_CLOUD_ID_PATH = "../es_id"
-ES_KEY_PATH = "../es_key"
+ES_CLOUD_ID_PATH = "./es_id"
+ES_KEY_PATH = "./es_key"
 ES_TOPIC_INDEX = "topics"
 ES_ARTICLE_INDEX = "articles"
 ES_TOPIC_VECTOR_FIELD = "description_embedding"
