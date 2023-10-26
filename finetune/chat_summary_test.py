@@ -75,6 +75,7 @@ if __name__ == "__main__":
     pipe = DSPipeline(model_name=script_args.model_path,
                       dtype=dtype,
                       is_meta=True,
+                      token=hf_token,
                       device=script_args.local_rank,
                       checkpoint_path=script_args.check_path,
                       model_type=model_type,

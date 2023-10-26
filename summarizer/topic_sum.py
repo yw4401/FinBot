@@ -1,6 +1,5 @@
 from typing import Any, List
 
-from chromadb import API
 from joblib import Parallel, delayed
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.chains import RetrievalQA, LLMChain, SimpleSequentialChain
@@ -19,8 +18,8 @@ except ModuleNotFoundError:
 
 
 class ChromaTopicRetriever(BaseRetriever):
-    topic_client: API
-    article_client: API
+    topic_client: Any
+    article_client: Any
     topic_collection: str
     doc_collection: str
     embedding: Any
@@ -133,6 +132,7 @@ if __name__ == "__main__":
                                        query_field=config.ES_ARTICLE_FIELD)
     retriever = ElasticSearchTopicRetriever(topic_elasticstore=topic_store, chunks_elasticstore=article_store)
     plan_llm = ChatVertexAI(
+        project=config.GCP_PROJECT,
         temperature=0,
         model_name="chat-bison",
         max_output_tokens=512

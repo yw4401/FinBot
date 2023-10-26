@@ -1,3 +1,5 @@
+GCP_PROJECT = "msca310019-capstone-f945"
+
 # Data Locations
 TOPIC_SUMMARY_DIR = "./topics/summaries/"
 TOPIC_ARTICLES_INDICES_DIR = "./topics/topic_indices/"
