@@ -56,7 +56,7 @@ def truncate_summary_example_plain(question, body, summary, tokenizer, max_conte
 
 
 def format_llama_sum_user(question, body):
-    return f"{config.LLAMA_Q_HEADER}\n{question}\n\n{config.LLAMA_C_HEADER}\n{body}"
+    return config.LLAMA_USER_TEMPLATE.format(context=body, question=question)
 
 
 def format_llama_sum_resp(summary):
