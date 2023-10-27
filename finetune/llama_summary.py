@@ -116,7 +116,7 @@ if __name__ == "__main__":
     with open("./hf_token", "r") as fp:
         hf_token = fp.read().strip()
 
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", token=hf_token,
+    tokenizer = AutoTokenizer.from_pretrained("Open-Orca/Mistral-7B-OpenOrca", token=hf_token,
                                               model_max_length=2048, add_eos_token=True, padding=True)
     tokenizer.pad_token = tokenizer.eos_token
     message_example = [
@@ -133,3 +133,5 @@ if __name__ == "__main__":
     print(tokenizer("test"))
     print(chat_applied)
     print(tokenizer(text))
+    for id in tokenizer(text)["input_ids"]:
+        print(tokenizer.decode([id]), end="")

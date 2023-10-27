@@ -16,7 +16,7 @@ from common import format_llama_sum_user, truncate_summary_example_chat
 @dataclass
 class ScriptArguments:
     model_path: Optional[str] = field(default="databricks/dolly-v2-3b")
-    template_path: Optional[str] = field(default="./dolly.template")
+    template_path: Optional[str] = field(default=None)
     output_name: Optional[str] = field(default="dolly-sum")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-test.parquet")
     token_path: Optional[str] = field(default="./hf_token")
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         with open(script_args.template_path, "r") as fp:
             template = fp.read()
 
-    test_df = pd.read_parquet(script_args.dataset_path).sample(10)
+    test_df = pd.read_parquet(script_args.dataset_path)
     with open(script_args.token_path, "r") as fp:
         hf_token = fp.read().strip()
 
