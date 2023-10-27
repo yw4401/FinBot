@@ -67,7 +67,6 @@ if __name__ == "__main__":
                                                   tokenizer=tokenizer,
                                                   max_context=script_args.max_input_length), axis=1)
     raw_inputs = test_df.apply(lambda row: prepare_conversation(row, tokenizer, chat_template=template), axis=1).tolist()
-    print(raw_inputs)
     results = []
     for i, output in enumerate(llm.generate(raw_inputs, sampling_params)):
         prompt = output.prompt
