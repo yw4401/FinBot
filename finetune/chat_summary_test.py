@@ -113,11 +113,10 @@ if __name__ == "__main__":
     for i, row in tqdm(test_df.iterrows(), total=test_df.shape[0]):
         raw_out: str = compute_conversation(row, pipe, chat_template=template, stopping_criteria=stopping_criteria,
                                             new_tokens=script_args.max_new_tokens)
-        parsed = raw_out.replace(config.LLAMA_S_HEADER.strip(), "").strip()
-        results.append(parsed)
+        results.append(raw_out)
 
         if i % 10 == 0 and local_rank == 0:
-            print(parsed)
+            print(raw_out)
 
     test_df["predicted"] = results
     out_file = f"{script_args.output_name}-test-predicted.parquet"

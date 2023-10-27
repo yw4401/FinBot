@@ -168,8 +168,6 @@ class DSPipeline:
             self.model = model_type.from_pretrained(self.repo_root, torch_dtype=dtype,
                                                     trust_remote_code=trust_remote_code, token=token)
             self.model.eval()
-            if self.dtype == torch.float16:
-                self.model.half()
 
     def __call__(self,
                  inputs=("test",), generate_kwargs=None):

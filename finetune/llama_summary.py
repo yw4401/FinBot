@@ -52,7 +52,9 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
 
     # loading and prepare dataset
-    train_df = pd.read_parquet("fine-tune-summary-train.parquet").sample(n=script_args.sample, random_state=93)
+    train_df = pd.read_parquet("fine-tune-summary-train.parquet")
+    if train_df.shape[0] > script_args.sample:
+        train_df = train_df.sample(n=script_args.sample, random_state=93)
     train_df["body"] = train_df.apply(
         lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
                                                   question=row["question"],
