@@ -1,3 +1,5 @@
+GCP_PROJECT = "msca310019-capstone-f945"
+
 # Data Locations
 TOPIC_SUMMARY_DIR = "./topics/summaries/"
 TOPIC_ARTICLES_INDICES_DIR = "./topics/topic_indices/"
@@ -16,13 +18,13 @@ TOPIC_SUMMARY_INDEX_FILE = "topic-chroma-{year}-{month}.zip"
 
 # Embeddings
 OPENAI_API = "./key"
-FILTER_EMBEDDINGS = "../embeddings"
+FILTER_EMBEDDINGS = "shilongdai/finember"
 TOPIC_COLLECTION = "topics"
 ARTICLE_COLLECTION = "articles"
 
 # Elasticsearch
-ES_CLOUD_ID_PATH = "../es_id"
-ES_KEY_PATH = "../es_key"
+ES_CLOUD_ID_PATH = "./es_id"
+ES_KEY_PATH = "./es_key"
 ES_TOPIC_INDEX = "topics"
 ES_ARTICLE_INDEX = "articles"
 ES_TOPIC_VECTOR_FIELD = "description_embedding"

@@ -1,34 +1,37 @@
 from dataclasses import dataclass, field
-from typing import cast, Optional, List
+from typing import cast, Optional
 
 import pandas as pd
 import torch
 from datasets import Dataset, DatasetDict
+from deepspeed import OnDevice
 from peft import LoraConfig
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    HfArgumentParser, LlamaTokenizer,
-)
+    HfArgumentParser, )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 
-from common import format_summary_example, truncate_summary_example
+import config
+from common import format_summary_example, truncate_summary_example_chat
 
 
 @dataclass
 class ScriptArguments:
-    model_path: Optional[str] = field(default="./Llama-2-7b-chat-hf")
+    model_path: Optional[str] = field(default="meta-llama/Llama-2-7b-chat-hf")
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
     model_max_length: Optional[int] = field(default=2048)
     eval_size: Optional[float] = field(default=1000)
-    lora_target: Optional[List[str]] = field(default=("q_proj", "k_proj", "v_proj"))
-    cache_dir: Optional[str] = field(default="./transformers")
+    lora_target: Optional[str] = field(default="q_proj,v_proj")
     lora_r: Optional[int] = field(default=16)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
+    cache_dir: Optional[str] = field(default="./transformers")
+    buffer_len: Optional[str] = field(default=20)
+    start_text: Optional[str] = field(default="<|im_start|> assistant")
 
 
 def main():
@@ -36,21 +39,30 @@ def main():
     train_args, script_args = parser.parse_args_into_dataclasses()
     train_args: TrainingArguments = cast(TrainingArguments, train_args)
     script_args: ScriptArguments = cast(ScriptArguments, script_args)
+    script_args.lora_target = script_args.lora_target.split(",")
 
     with open(script_args.token_path, "r") as fp:
         hf_token = fp.read().strip()
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token,
-                                              model_max_length=script_args.model_max_length)
+                                              model_max_length=script_args.model_max_length,
+                                              add_eos_token=True,
+                                              cache_dir=script_args.cache_dir,
+                                              padding_side="right")
     tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
 
     # loading and prepare dataset
-    train_df = pd.read_parquet("fine-tune-summary-train.parquet").sample(n=script_args.sample, random_state=93)
-    train_df["body"] = train_df.apply(lambda row: truncate_summary_example(row["question"],
-                                                                           row["body"],
-                                                                           row["summary"], tokenizer,
-                                                                           script_args.model_max_length), axis=1)
+    train_df = pd.read_parquet("fine-tune-summary-train.parquet")
+    if train_df.shape[0] > script_args.sample:
+        train_df = train_df.sample(n=script_args.sample, random_state=93)
+    train_df["body"] = train_df.apply(
+        lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
+                                                  question=row["question"],
+                                                  body=row["body"],
+                                                  summary=row["summary"],
+                                                  tokenizer=tokenizer,
+                                                  max_context=script_args.model_max_length,
+                                                  buffer=script_args.buffer_len), axis=1)
     print(train_df.head())
     print(train_df.summary.iloc[0])
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
@@ -69,20 +81,22 @@ def main():
     )
 
     # loading the base model
-    model = AutoModelForCausalLM.from_pretrained(
-        script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-        torch_dtype=torch.bfloat16, use_flash_attention_2=True)
+    with OnDevice(dtype=torch.bfloat16, device="meta", enabled=True):
+        model = AutoModelForCausalLM.from_pretrained(
+            script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+            torch_dtype=torch.bfloat16, use_flash_attention_2=True, low_cpu_mem_usage=True,
+            cache_dir=script_args.cache_dir)
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
     print(raw_datasets["train"])
     # creating trainer with collator
-    response_template = "### Summary"
-    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
+    collator = DataCollatorForCompletionOnlyLM(script_args.start_text, tokenizer=tokenizer)
 
     trainer = SFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], formatting_func=format_summary_example,
-        data_collator=collator,
+        model=model, args=train_args, train_dataset=raw_datasets["train"],
+        formatting_func=lambda x: format_summary_example(x, tokenizer),
+        data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
     # trainer.accelerator.print(f"{trainer.model}")
@@ -93,17 +107,31 @@ def main():
 
     # save model on main process
     trainer.accelerator.wait_for_everyone()
-    state_dict = trainer.accelerator.get_state_dict(trainer.deepspeed)
-    unwrapped_model = trainer.accelerator.unwrap_model(trainer.deepspeed)
     if trainer.accelerator.is_main_process:
-        unwrapped_model.save_pretrained(train_args.output_dir, state_dict=state_dict)
+        trainer.save_model()
     trainer.accelerator.wait_for_everyone()
-
-    # save everything else on main process
-    if trainer.args.process_index == 0:
-        trainer.model.save_pretrained(train_args.output_dir, safe_serialization=True)
-        tokenizer.save_pretrained(train_args.output_dir)
 
 
 if __name__ == "__main__":
-    main()
+    with open("./hf_token", "r") as fp:
+        hf_token = fp.read().strip()
+
+    tokenizer = AutoTokenizer.from_pretrained("Open-Orca/Mistral-7B-OpenOrca", token=hf_token,
+                                              model_max_length=2048, add_eos_token=True, padding=True)
+    tokenizer.pad_token = tokenizer.eos_token
+    message_example = [
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Who are you"},
+        {"role": "assistant", "content": "A helpful assistant"}
+    ]
+    chat_applied = tokenizer.apply_chat_template(message_example, tokenize=False)
+    text = chat_applied
+    if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+        text = text[len(tokenizer.bos_token):]
+    if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+        text = text[:-len(tokenizer.eos_token)]
+    print(tokenizer("test"))
+    print(chat_applied)
+    print(tokenizer(text))
+    for id in tokenizer(text)["input_ids"]:
+        print(tokenizer.decode([id]), end="")

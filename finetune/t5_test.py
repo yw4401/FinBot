@@ -32,7 +32,7 @@ if __name__ == "__main__":
     TEMPERATURE = 0
 
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN)
-    max_input_length = tokenizer.model_max_length
+    max_input_length = tokenizer.max_input_length
     max_target_length = MAX_SUMMARY_TOKEN
     print(f"Truncating to {max_input_length}")
     test_body = ListDataset(test_df["body"].tolist())

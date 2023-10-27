@@ -1,17 +1,8 @@
-from typing import List
-
 import torch
 from transformers import (
-    LlamaTokenizer,
-)
+    LlamaTokenizer, StoppingCriteria, )
 
 import config
-
-B_INST, E_INST = "[INST]", "[/INST]"
-B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-
-SPECIAL_TAGS = [B_INST, E_INST, "<<SYS>>", "<</SYS>>"]
-UNSAFE_ERROR = "Error: special tags are not allowed as part of the prompt."
 
 
 class ListDataset(torch.utils.data.Dataset):
@@ -26,11 +17,6 @@ class ListDataset(torch.utils.data.Dataset):
         return self.original_list[i]
 
 
-def token_count(text, tokenizer):
-    tokenized = tokenizer.encode(text, add_special_tokens=False)
-    return len(tokenized)
-
-
 def restrict_article(text, max_token, tokenizer: LlamaTokenizer):
     tokenized = tokenizer.encode(text, add_special_tokens=False)
     if len(tokenized) > max_token:
@@ -38,47 +24,39 @@ def restrict_article(text, max_token, tokenizer: LlamaTokenizer):
     return text
 
 
-def format_prompt(examples):
-    if examples[0]["role"] == "system":
-        examples = [
-                       {
-                           "role": examples[1]["role"],
-                           "content": B_SYS
-                                      + examples[0]["content"]
-                                      + E_SYS
-                                      + examples[1]["content"],
-                       }
-                   ] + examples[2:]
-    assert all([msg["role"] == "user" for msg in examples[::2]]) and all(
-        [msg["role"] == "assistant" for msg in examples[1::2]]
-    ), (
-        "model only supports 'system', 'user' and 'assistant' roles, "
-        "starting with 'system', then 'user' and alternating (u/a/u/a/u...)"
-    )
-    dialog_texts: List[str] = [
-        f"<s>{B_INST} {(prompt['content']).strip()} {E_INST} {(answer['content']).strip()} </s>"
-        for prompt, answer in zip(
-            examples[::2],
-            examples[1::2],
-        )
+def truncate_summary_example_chat(system, question, body, summary, tokenizer, max_context,
+                                  buffer=20, template=None):
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": format_llama_sum_user(question, "")},
+        {"role": "assistant", "content": format_llama_sum_resp(summary)}
     ]
-    return "".join(dialog_texts)
+    body_tokens = max_context - len(tokenizer.apply_chat_template(messages, chat_template=template)) - buffer
+    return restrict_article(body, body_tokens, tokenizer)
 
 
-def truncate_summary_example(question, body, summary, tokenizer, max_context):
-    body_tokens = max_context - token_count(question, tokenizer) - token_count(summary, tokenizer) - 20
+def truncate_summary_example_plain(question, body, summary, tokenizer, max_context,
+                                   input_template=config.PLAIN_INPUT_TEMPLATE,
+                                   output_template=config.PLAIN_OUTPUT_TEMPLATE, seq2seq=True, buffer=20):
+    final_input = input_template.format(body=body, question=question)
+    final_output = output_template.format(summary=summary)
+    if seq2seq:
+        final_text = final_input
+    else:
+        final_text = final_input + "\n" + final_output
+    body_tokens = max_context - len(tokenizer.encode(final_text, add_special_tokens=False)) - buffer
     return restrict_article(body, body_tokens, tokenizer)
 
 
 def format_llama_sum_user(question, body):
-    return f"{config.LLAMA_Q_HEADER}\n{question}\n\n{config.LLAMA_C_HEADER}\n{body}"
+    return config.LLAMA_USER_TEMPLATE.format(context=body, question=question)
 
 
 def format_llama_sum_resp(summary):
-    return config.LLAMA_S_HEADER + summary
+    return config.LLAMA_S_TEMPLATE.format(summary=summary)
 
 
-def format_summary_example(example):
+def format_summary_example(example, tokenizer, template=None):
     output_texts = []
     for i in range(len(example['body'])):
         q = example["question"][i]
@@ -86,11 +64,47 @@ def format_summary_example(example):
         s = format_llama_sum_resp(example["summary"][i])
 
         user = format_llama_sum_user(q, c)
-        text = format_prompt([
+        text = tokenizer.apply_chat_template([
             {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
             {"role": "user", "content": user},
             {"role": "assistant", "content": s}
-        ])
-        output_texts.append(text[len("<s>"):-len("</s>")])
+        ], tokenize=False, chat_template=template)
+        if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+            text = text[len(tokenizer.bos_token):]
+        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+            text = text[:-len(tokenizer.eos_token)]
+        output_texts.append(text)
 
     return output_texts
+
+
+def find_target_modules(model):
+    # Initialize a Set to Store Unique Layers
+    unique_layers = set()
+
+    # Iterate Over All Named Modules in the Model
+    for name, module in model.named_modules():
+        # Check if the Module Type Contains 'Linear4bit'
+        if "Linear4bit" in str(type(module)):
+            # Extract the Type of the Layer
+            layer_type = name.split('.')[-1]
+
+            # Add the Layer Type to the Set of Unique Layers
+            unique_layers.add(layer_type)
+
+    # Return the Set of Unique Layers Converted to a List
+    return list(unique_layers)
+
+
+class StoppingCriteriaSub(StoppingCriteria):
+
+    def __init__(self, stops=()):
+        super().__init__()
+        self.stops = [stop.to("cuda") for stop in stops]
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs):
+        for stop in self.stops:
+            if torch.all((stop == input_ids[0][-len(stop):])).item():
+                return True
+
+        return False

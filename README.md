@@ -1,16 +1,67 @@
 # FinBot
 
-*TODO: Add table of content*
+## Table of contents
+1. [Demo](#demo)
+2. [About FinBot](#background)
+   1. [Industry Research](#industry_research)
+   2. [Project Mission](#mission)
+   3. [Main Features](#features)
+3. [Project Implementation](#implementation)
+   1. [Architecture](#architecture)
+   2. [Data Ingestion](#ingestion)
+   3. [Output Generation](#generation)
+   4. [Model Improvements](#model)
+4. [Next Steps](#next)
 
-## Project Description
-The FinBot uses large language models and Natural Language Processing (NLP) to analyze news articles and provide insights to retail investors. The application allows users to stay informed about potential hypes and important events by analyzing a specified time period of news articles.
 
-## Target Audience and Main Use Case
-FinBot was developed with specifically the retail investors in mind. Compared to dedicated asset managers, retail 
-investors do not have the time nor exposure to do a comprehensive research into the current hot areas that may be of 
-interests from an investment perspective. In addition, concerning very specific industries, such as the pharmaceutical 
-ones, some domain knowledge may be required to extract the key information from the articles. Thus, by leveraging the LLMs,
-FinBot can enpower the retail investors to have some support in getting key news information for their investment.
+## Demo <a name="demo"></a>
+
+TODO
+
+## About FinBot <a name="background"></a>
+
+FinBot is an AI driven web application capable of analyzing financially related news articles and provide 
+insights to retail investors. The application can empower the users to make better investment decisions while saving 
+time and money by letting leveraging the power of LLM and retrieval augmented generation.
+
+### Industry Research <a name="industry_research"></a>
+
+TODO
+
+### Project Mission <a name="mission"></a>
+
+As a retail investor with a diverse set of interests and goals, there are many challenges to overcome in accomplishing 
+investment goals.
+
+### The Unknown Unknown
+
+While retail investors can be capable of understanding the big picture, they generally do not have the time 
+nor the exposure to conduct comprehensive research to make specific investment decisions. For instance, 
+when COVID hit, it can be apparent that companies related to making remote work possible would be benefited from the 
+situation. However, in addition to the consumer facing 
+products such as Zoom, the products further upstream such as various cloud hosting services, data center properties, 
+and chip manufacturers also experienced a boost in demand. However, for the retail investors, unless the area 
+happens to fall into their expertise, such information may be an unknown unknown to them. 
+
+### Staying up-to-date
+
+Investment opportunities are time-dependent and require up-to-date information. But, staying up-to-date while life 
+happens require constant effort. Making informed decision regarding the pharmaceutical industry would potentially 
+entail keeping track of the development and approval process of treatment procedures. But, not everyone has the 
+time or energy to scan through news and documents on medical procedures after a long day at work and taking care 
+of family matters.
+
+### Democratizing the Market
+
+Generic ETFs and mutual funds are common solutions employed by retail investors to get a decent return without 
+having expert knowledge. Thus, the asset managers or index tracking algorithms are making decisions on behalf of a large 
+number of retail investors. In recent years, the growth of ESG suggests that investors may have additional interests, 
+such as delivering social impact, by means of their investment. The new interests beyond having a market level 
+return may entail the need to become better informed, and to take greater control of the investment decision into 
+their own hands.
+
+The aim of the project is to alleviate those pain-points by reducing the information asymmetry that leads to less efficient 
+investment choices by retail investors compared to a dedicated advisor or asset manager.
 
 ## Main Features
 - Answer any questions about recent business news and developments to stay well informed

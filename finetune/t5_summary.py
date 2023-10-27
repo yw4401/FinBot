@@ -104,7 +104,7 @@ if __name__ == "__main__":
     model = get_peft_model(model, peft_config)
     
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, model_max_length=MAX_BODY_TOKEN, cache_dir=cache_dir)
-    max_input_length = tokenizer.model_max_length
+    max_input_length = tokenizer.max_input_length
     max_target_length = MAX_SUMMARY_TOKEN
     tokenized_datasets = raw_datasets.map(lambda r: preprocess_function(r, max_input_length, max_target_length),
                                           batched=True)
