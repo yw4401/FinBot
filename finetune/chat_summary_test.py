@@ -26,6 +26,7 @@ class ScriptArguments:
     max_new_tokens: Optional[int] = field(default=256)
     temperature: Optional[float] = field(default=0)
     stop_criteria: Optional[str] = field(default=None)
+    gpu_utilization: Optional[float] = field(default=0.9)
 
 
 def prepare_conversation(row, tokenizer, chat_template=None):
@@ -57,7 +58,8 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_path)
     sampling_params = SamplingParams(temperature=0, max_tokens=script_args.max_new_tokens, stop=stops)
-    llm = LLM(model=script_args.model_path, dtype=script_args.dtype, tensor_parallel_size=script_args.world_size)
+    llm = LLM(model=script_args.model_path, dtype=script_args.dtype, gpu_memory_utilization=script_args.gpu_utilization,
+              tensor_parallel_size=script_args.world_size)
 
     test_df["body"] = test_df.apply(
         lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
