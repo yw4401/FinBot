@@ -31,7 +31,8 @@ FIQA_TEMPERATURE = 0
 # Finetuning Parameters
 LLAMA_SUMMARY_BULLET_INSTRUCTION = "Summarize the key-points from the given context. " \
                                    "The information in the summary should include, " \
-                                   "but should not be limited to information that can help answer the given question."
+                                   "but should not be limited to information that can help answer the given question. " \
+                                   "Be concise if possible."
 LLAMA_SUMMARY_PARA_INSTRUCTION = "Summarize the given context. " \
                                  "The information in the summary should include, " \
                                  "but should not be limited to information that can help answer the given question. " \
