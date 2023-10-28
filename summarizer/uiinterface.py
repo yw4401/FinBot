@@ -3,7 +3,7 @@ from langchain.chat_models import ChatVertexAI
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
 import summarizer.config as config
-from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain
+from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries
 
 with open(config.ES_KEY_PATH, "r") as fp:
     es_key = fp.read().strip()
@@ -34,13 +34,24 @@ def answer_question(query):
     return asyncio.create_task(qa_agg_chain.acall(query))
 
 
+def find_summaries(query):
+    plan_llm = ChatVertexAI(
+        project=config.GCP_PROJECT,
+        temperature=0,
+        model_name="chat-bison",
+        max_output_tokens=512
+    )
+    return aget_summaries(query, topic_store, article_store, plan_llm)
+
+
 async def get_qa_result(query):
-    summaries = [{"title": "Main Point", "keypoints": ["K1", "K2", "K3"]},
-                 {"title": "Lorem Ipsum", "keypoints": ["K1", "K2", "K3"]}]
-    completed = await asyncio.ensure_future(answer_question(query))
+    qa_coro = asyncio.ensure_future(answer_question(query))
+    sum_coro = asyncio.ensure_future(aget_summaries(query))
+
+    qa_completed, summaries = asyncio.gather(qa_coro, sum_coro)
 
     return {
-        "qa": completed["result"].strip(),
+        "qa": qa_completed["result"].strip(),
         "summaries": summaries
     }
 

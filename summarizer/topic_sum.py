@@ -1,4 +1,6 @@
 import asyncio
+import re
+
 from langchain.callbacks.base import Callbacks
 from typing import Any, List, Optional, Dict
 
@@ -81,7 +83,7 @@ class ChainRetriever(BaseRetriever):
 
 
 def create_topic_qa_chain(model, vector_db, topic, **kwargs):
-    chroma_embed = SentenceTransformerEmbeddings(model_name=config.TOPIC_EMBEDDING)
+    chroma_embed = SentenceTransformerEmbeddings(model_name=config.FILTER_EMBEDDINGS)
     chroma_langchain = Chroma(client=vector_db, collection_name=config.ARTICLE_COLLECTION,
                               embedding_function=chroma_embed)
     chroma_search = {"k": config.ARTICLE_K, "filter": {"topic": topic}}
@@ -139,7 +141,27 @@ async def acreate_keypoints_chains(query, topic_db, chunk_db, model, select_k=co
 
 async def aget_summaries(query, topic_db, chunk_db, model, select_k=config.TOPIC_SUM_K, top_k=config.TOPIC_SUM_TOP_K,
                          chunk_k=config.TOPIC_SUM_CHUNKS):
-    pass
+    key_chains = await acreate_keypoints_chains(query, topic_db, chunk_db, model,
+                                                select_k=select_k, chunk_k=chunk_k)
+    tasks = [c.acall(query) for c in key_chains]
+    inter_results = asyncio.gather(*tasks)
+    split_regex = re.compile(r"\n\*")
+
+    results = []
+    for r in inter_results:
+        result_text = r["result"].strip()
+        if result_text == "IMPOSSIBLE":
+            continue
+        if len(results) >= top_k:
+            break
+        parts = split_regex.split(result_text)
+
+        results.append({
+            "title": parts[0],
+            "keypoints": parts[1:] if len(parts) > 1 else []
+        })
+
+    return results
 
 
 if __name__ == "__main__":
