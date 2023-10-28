@@ -204,19 +204,21 @@ was selected. In this case, the first epoch resulted in the best performing mode
 Since for our purposes, we would only retrieve the top 2-3 chunks given the constraints on the context window, we evaluated 
 the model performance with K = 2 and K = 2. The following metrics were computed on the test set from FIQA.
 
+##### Performance Before Tuning
+
 | K/Metrics | Accuracy@K | Precision@K | Recall@K | NDCG@K   | MRR@K    | MAP@K    |
 |-----------|------------|-------------|----------|----------|----------|----------|
 | 2         | 0.762346   | 0.672840    | 0.359836 | 0.678078 | 0.729167 | 0.656250 |
 | 3         | 0.807099   | 0.584362    | 0.440857 | 0.663874 | 0.744084 | 0.620971 |
+[Performance Before Tuning]
 
-: Performance After Tuning
+##### Performance After Tuning
 
 | K/Metrics | Accuracy@K | Precision@K | Recall@K | NDCG@K   | MRR@K    | MAP@K    |
 |-----------|------------|-------------|----------|----------|----------|----------|
 | 2         | 0.791667   | 0.710648    | 0.377674 | 0.713267 | 0.756944 | 0.693287 |
 | 3         | 0.828704   | 0.618827    | 0.461880 | 0.698001 | 0.769290 | 0.659422 |
-
-: Performance After Tuning
+[Performance After Tuning]
 
 In general, we were able to improve the embedding model performance by a few percentage points for each metric.
 
