@@ -166,27 +166,59 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - Then, for each relevant topics, the top K text chunks from the topic is found via a combined score of full text search (entities, raw text, titles) and chunk embeddings (MMR)
 - While searching, the chunks are constraint according to user specified time-frame
 
-*TODO: Make diagram for algorithm*
-
 #### Generation
 - A custom fine-tuned summary model on the article summaries is used with the retrieved chunks to generate the key-points summaries
 - A model fine-tuned on reading comprehension based free-form QA is used to directly answer the user query
 - Raw text generation is enriched via public metrics such as P/E ratio, Cashflow etc based on entities found in query and generated output
-- *TODO: Add more details once done*
+- The Streamlit UI combines the QA generation, the summarized key-points, and the KPIs in a coherent page for the user.
 
 ### Model Improvements
 
-*TODO: Add hyper-parameters and more details on evaluation strategy when model finalizes*
+In addition to creating envelops around LLMs, we customized the pre-trained models. We require the following models for 
+our solution:
+
+- Embedding Model: A model capable of vectorizing the text such that the distance between queries and relevant chunks would be minimized
+- QA Model: A LLM capable of directly answering the query of the user given retrieved chunks
+- Targeted Summarization Model: A LLM capable of summarizing the key-points of chunks relevant to the query
+
+In order to fulfill the modeling requirements, we conducted an initial evaluation of pre-trained models to determine the 
+best one to fine-tune (if needed). Next, we fine-tuned the models gathered data to improve the performance and to get the 
+desired output format. Then, we evaluated the fine-tuned models on a separate test dataset to determine if the tuned models 
+meet our ends. Finally, the fine-tuned models are deployed on GCP to serve our clients.
 
 #### Text Embedding
-The [ember-v1](https://huggingface.co/llmrails/ember-v1) model is used as a base for creating the embeddings for retrieval. 
-In order to make it more tailored to retrieving chunks based on questions that a retail investor may ask, the model was 
-fine-tuned on the [FIQA](https://sites.google.com/view/fiqa/home) dataset. The post-finetune results for K=2 and K=3 on the FIQA test set are given below.
+The [ember-v1](https://huggingface.co/llmrails/ember-v1) model is used as a base for creating the embeddings for retrieval. The ember-v1 model is the best 
+non-instructed tuned embedding model for retrieval task on the HuggingFace MTEB Leaderboard. Thus, we have determined that 
+it would achieve a good balance of performance and simplicity to start our fine-tuning.
+
+In order to align the generated embeddings with financially related queries and text, we sourced and augmented the 
+[FIQA](https://sites.google.com/view/fiqa/home) dataset, which contains questions and answer paragraph pairs on financially related subjects. Since the original 
+FIQA dataset was created by scraping questions asked on forums such as stackexchange and reddit, we augmented the train, 
+eval, and test split of the dataset separately by prompting PaLM2 chat-bison to re-write the answer paragraph in a formal 
+way adhering to the convention of news and/or reports.
+
+The fine-tuning followed a standard train-eval loop for 10 epochs on the FIQA train/eval splits. The default hyper-parameters 
+from sentence transformers were applied. After running through the 10 epochs, checkpoint with the best max(MAP@2, MAP@3) score 
+was selected. In this case, the first epoch resulted in the best performing model.
+
+Since for our purposes, we would only retrieve the top 2-3 chunks given the constraints on the context window, we evaluated 
+the model performance with K = 2 and K = 2. The following metrics were computed on the test set from FIQA.
+
+| K/Metrics | Accuracy@K | Precision@K | Recall@K | NDCG@K   | MRR@K    | MAP@K    |
+|-----------|------------|-------------|----------|----------|----------|----------|
+| 2         | 0.762346   | 0.672840    | 0.359836 | 0.678078 | 0.729167 | 0.656250 |
+| 3         | 0.807099   | 0.584362    | 0.440857 | 0.663874 | 0.744084 | 0.620971 |
+
+: Performance After Tuning
 
 | K/Metrics | Accuracy@K | Precision@K | Recall@K | NDCG@K   | MRR@K    | MAP@K    |
 |-----------|------------|-------------|----------|----------|----------|----------|
 | 2         | 0.791667   | 0.710648    | 0.377674 | 0.713267 | 0.756944 | 0.693287 |
 | 3         | 0.828704   | 0.618827    | 0.461880 | 0.698001 | 0.769290 | 0.659422 |
+
+: Performance After Tuning
+
+In general, we were able to improve the embedding model performance by a few percentage points for each metric.
 
 #### Summarization
 The FLAN-T5 models is used as a base for creating key-point summaries. In order to make it generate more text than 
