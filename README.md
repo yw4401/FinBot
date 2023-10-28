@@ -152,7 +152,9 @@ Once the indices are built, the solution is ready to generate output for the use
 The final output to the user consists of three main segments:
 - Direct answer to user query
 - Key-points/Insights from Top Topics Relevant to User Query
-- KPIs of companies related to th
+- KPIs of companies related to the query and generated outputs
+
+![Output Generation](images/output_gen.png)
 
 The algorithms for handling output is located in the [summarizer](summarizer) directory.
 
