@@ -147,7 +147,12 @@ the articles for output generation by chunking the article texts and indexing th
 
 Once the indices are built, the solution is ready to generate output for the users.
 
-### Response Generation
+### Output Generation
+
+The final output to the user consists of three main segments:
+- Direct answer to user query
+- Key-points/Insights from Top Topics Relevant to User Query
+- KPIs of companies related to th
 
 The algorithms for handling output is located in the [summarizer](summarizer) directory.
 
@@ -166,7 +171,6 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - A model fine-tuned on reading comprehension based free-form QA is used to directly answer the user query
 - Raw text generation is enriched via public metrics such as P/E ratio, Cashflow etc based on entities found in query and generated output
 - *TODO: Add more details once done*
-
 
 ### Model Improvements
 
