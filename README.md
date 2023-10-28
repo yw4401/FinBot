@@ -220,14 +220,33 @@ the model performance with K = 2 and K = 2. The following metrics were computed 
 
 In general, we were able to improve the embedding model performance by a few percentage points for each metric.
 
-#### Summarization
-The FLAN-T5 models is used as a base for creating key-point summaries. In order to make it generate more text than 
-the pre-training data, and also to produce the format that we requires, the model was fine-tuned on the key-points created by 
-human writer from the scraped articles. The final results are given below.
+#### Targeted Summarization
 
-![Rouge2](images/rouge2.png)
+##### Initial Evaluation
 
-![ChatGPT Rated](images/chat-gpt-rated.png)
+For our summarization model, we used the scraped articles as a foundation to pick, train, and evaluate the models. Since 
+the goal is to generate key-points for the user, we decided to let the model mimic the human-written key-points summaries 
+generally found together with the financially related news articles. The final aggregated news dataset consists of ~50K 
+articles in the training set, and 1000 articles in the test set. We excluded the evaluation set for this model because 
+we did not tune hyper-parameters for the fine-tuning. Since the scraped data would not contain potential questions that the 
+users would ask for the targeted summaries, we augmented the data by using PaLM2 chat-bison to come up with a question that 
+a retail investor might ask with an answer found in the article, and a different question where it would be impossible to 
+answer with information contained in the article. For the impossible case, we set the output summary to be "IMPOSSIBLE."
+
+After considering the ease of deployment, the advancements in model architecture, and the availability of supportive 
+infrastructure such as VLLM, we arrived at 2 candidate model for targeted summaries. The first candidate was the chat version 
+of the Llama-2 7B model. The second candidate, Open-Orca Mistral-7B was one of the top performer on the HuggingFace 
+LLM leaderboard. We evaluated the base model on our targetted summaries dataset by considering the ROUGE-2 Score on instances 
+where both the predicted and actual summaries are not "IMPOSSIBLE", and the 
+ability of the model to classify the case when it's impossible to create the targeted summary. 
+
+![Initial ROUGE](images/initial_rouge.png)
+
+![Initial Hallucination](images/initial_hal.png)
+
+From our initial evaluation, we determined that while both models did not meet our expectations on identifying impossible 
+cases via a prompt engineering approach, Mistral is closer to our goal from an output perspective. Furthermore, Mistral 
+has proven itself on the Huggingface Leaderboard. Thus, we decided to move forward with Open-Orca-Mistral7B.
 
 #### Question Answering
 @Shefali, @Takuma Add once done
