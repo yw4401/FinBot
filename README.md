@@ -95,6 +95,12 @@ Our work to implement the process can be roughly divided into three main parts:
 
 ### Data Ingestion
 
+The data collection pipeline collects and aggregate news articles. Then, it applies a series of NLP techniques including 
+co-reference resolution, topic modeling, text embedding, NER, and Min-Hash to augment the articles. Finally, it prepares 
+the articles for output generation by chunking the article texts and indexing the chunks.
+
+![Ingestion](images/ingestion.png)
+
 #### Web Scraping for Data Collection ([scraper](scraper))
 - We've gathered data from prominent news sources, including CNBC, The New York Times, and Reuters, as part of the data collection phase. The [common.py](scraper/common.py) is a framework that serves as the backbone for the web scraper. It encapsulates the essential functionality of traversing HTML pages by following links, verifying if a URL has already been scraped, and progressing to the subsequent page.
 - The [cnbc_requests.py](scraper/cnbc_requests.py), [nyt_requests.py](scraper/nyt_requests.py) and [reuters_requests.py](scraper/reuters_requests.py) scripts are dedicated scrapers designed for their respective news sources, employing the '[lxml](https://lxml.de/)' module to extract key information such as article sections, titles, publication timestamps, article bodies, and optional summaries.
