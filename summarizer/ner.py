@@ -1,5 +1,5 @@
 def extract_company_ticker(text):
-    return "XOM"
+    return "MSFT"
 
 
 def extract_relevant_field(text):

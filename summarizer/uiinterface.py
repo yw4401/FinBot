@@ -1,12 +1,9 @@
-from functools import partial
-
 import asyncio
 from langchain.chat_models import ChatVertexAI
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
 import summarizer.config as config
 from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain
-import nest_asyncio
 
 with open(config.ES_KEY_PATH, "r") as fp:
     es_key = fp.read().strip()

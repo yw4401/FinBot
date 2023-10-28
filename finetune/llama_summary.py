@@ -49,7 +49,7 @@ def main():
                                               add_eos_token=True,
                                               cache_dir=script_args.cache_dir,
                                               padding_side="right")
-    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.pad_token = "[PAD]"
 
     # loading and prepare dataset
     train_df = pd.read_parquet("fine-tune-summary-train.parquet")

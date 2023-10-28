@@ -40,5 +40,16 @@ TOPIC_FILTER_FORMAT_SYSTEM = "You are an AI assistant that will format given tex
 TOPIC_FILTER_FORMAT_USER = "{result}"
 TOPIC_K = 3
 
-# Article Response
+# Article QA Response
 ARTICLE_K = 2
+
+# Article Summary Response
+TOPIC_SUM_K = 5
+TOPIC_SUM_TOP_K = 3
+TOPIC_SUM_CHUNKS = 15
+TOPIC_SUM_SYSTEM = "Summarize the key-points from the given context. " \
+                   "The information in the summary should include, " \
+                   "but should not be limited to information that can help answer the given question. " \
+                   "Be concise if possible. " \
+                   'Respond with "IMPOSSIBLE" if the context does not contain information that can answer the given question.'
+TOPIC_SUM_USER = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"

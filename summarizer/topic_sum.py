@@ -1,4 +1,6 @@
-from typing import Any, List
+import asyncio
+from langchain.callbacks.base import Callbacks
+from typing import Any, List, Optional, Dict
 
 from joblib import Parallel, delayed
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
@@ -17,6 +19,15 @@ except ModuleNotFoundError:
     import summarizer.config as config
 
 
+async def afind_top_topics(vector_db, query, k=5):
+    topic_results = await vector_db.amax_marginal_relevance_search(query, k=k)
+    return topic_results
+
+
+def find_top_topics(vector_db, query, k=5):
+    return vector_db.max_marginal_relevance_search(query, k=k)
+
+
 class ElasticSearchTopicRetriever(BaseRetriever):
     topic_elasticstore: ElasticsearchStore
     chunks_elasticstore: ElasticsearchStore
@@ -24,12 +35,25 @@ class ElasticSearchTopicRetriever(BaseRetriever):
     chunk_k: int = config.ARTICLE_K
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        topic_results = self.topic_elasticstore.max_marginal_relevance_search(query, k=self.topic_k)
+        topic_results = find_top_topics(self.topic_elasticstore, query, k=self.topic_k)
         parallel = Parallel(n_jobs=self.topic_k, backend="threading", return_as="generator")
         result = []
         topic_nums = [topic.metadata["topic"] for topic in topic_results]
         for chunk in parallel(delayed(self._get_relevant_chunks)(t, query) for t in topic_nums):
             result.extend(chunk)
+        return result
+
+    async def aget_relevant_documents(self, query: str, *, callbacks: Callbacks = None, tags: Optional[
+        List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None, **kwargs: Any):
+        topic_results = await afind_top_topics(self.topic_elasticstore, query, k=self.topic_k)
+        topic_nums = [topic.metadata["topic"] for topic in topic_results]
+        coros = [self.chunks_elasticstore.amax_marginal_relevance_search(query=query, k=self.chunk_k,
+                                                                         filter=[{"term": {
+                                                                             "metadata.topic": t}}]) for t in
+                 topic_nums]
+        result = []
+        for r in await asyncio.gather(*coros):
+            result.extend(r)
         return result
 
     def _get_relevant_chunks(self, topic_num, query):
@@ -90,6 +114,32 @@ def create_topic_filter(model, vector_db, **kwargs):
         return [int(t) for t in overall_chain(input_question)["output"]]
 
     return filter_func
+
+
+def create_keypoints_chain(chunk_db, topic, model, k=15):
+    system_prompt = SystemMessagePromptTemplate.from_template(config.TOPIC_SUM_SYSTEM)
+    user_prompt = HumanMessagePromptTemplate.from_template(config.TOPIC_SUM_USER)
+    overall_prompt = ChatPromptTemplate.from_messages([system_prompt, user_prompt])
+    chain_type_kwargs = {"prompt": overall_prompt}
+    chain = RetrievalQA.from_chain_type(llm=model, chain_type="stuff",
+                                        retriever=chunk_db.as_retriever(search_type="mmr",
+                                                                        search_kwargs={'k': k, 'fetch_k': k * 3,
+                                                                                       'filter': {
+                                                                                           'topic': topic}}),
+                                        chain_type_kwargs=chain_type_kwargs)
+    return chain
+
+
+async def acreate_keypoints_chains(query, topic_db, chunk_db, model, select_k=config.TOPIC_SUM_K,
+                                   chunk_k=config.TOPIC_SUM_CHUNKS):
+    topic_results = await afind_top_topics(topic_db, query, k=select_k)
+    topic_nums = [topic.metadata["topic"] for topic in topic_results]
+    return [create_keypoints_chain(chunk_db, t, model, k=chunk_k) for t in topic_nums]
+
+
+async def aget_summaries(query, topic_db, chunk_db, model, select_k=config.TOPIC_SUM_K, top_k=config.TOPIC_SUM_TOP_K,
+                         chunk_k=config.TOPIC_SUM_CHUNKS):
+    pass
 
 
 if __name__ == "__main__":
