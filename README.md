@@ -30,7 +30,7 @@ TODO
 
 ### Project Mission <a name="mission"></a>
 
-As a retail investor with a diverse set of interests and goals, there are many challenges to overcome in accomplishing 
+As a retail investor with a diverse set of interests, there are many challenges to overcome in accomplishing 
 investment goals.
 
 ### The Unknown Unknown
@@ -46,8 +46,9 @@ happens to fall into their expertise, such information may be an unknown unknown
 ### Staying up-to-date
 
 Investment opportunities are time-dependent and require up-to-date information. But, staying up-to-date while life 
-happens require constant effort. Making informed decision regarding the pharmaceutical industry would potentially 
-entail keeping track of the development and approval process of treatment procedures. But, not everyone has the 
+happens require constant effort. Suppose that an investor is interested in pharmaceutical sector, but making informed 
+decision regarding the pharmaceutical industry would potentially entail keeping track of the development and approval 
+process of treatment procedures. But, not everyone has the 
 time or energy to scan through news and documents on medical procedures after a long day at work and taking care 
 of family matters.
 
@@ -63,10 +64,10 @@ their own hands.
 The aim of the project is to alleviate those pain-points by reducing the information asymmetry that leads to less efficient 
 investment choices by retail investors compared to a dedicated advisor or asset manager.
 
-## Main Features
-- Answer any questions about recent business news and developments to stay well informed
-- Summarizing contextual information from different perspectives to present a big picture
-- Automatically extracting relevant metrics from companies based on user interests
+### Main Features
+- Answer any questions about business news and developments in a time frame
+- Summarize contextual information from different perspectives
+- Automatically pulling relevant financial metrics from companies
 - *TODO: Add more as we develop it further*
 
 ## TODO: @Yif Add UI demo video/image/gif once ready
