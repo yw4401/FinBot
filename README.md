@@ -5,7 +5,7 @@
 2. [About FinBot](#background)
    1. [Industry Research](#industry_research)
    2. [Project Mission](#mission)
-   3. [Main Features](#features)
+   3. [Current Features](#features)
 3. [Project Implementation](#implementation)
    1. [Architecture](#architecture)
    2. [Data Ingestion](#ingestion)
@@ -33,7 +33,7 @@ TODO
 As a retail investor with a diverse set of interests, there are many challenges to overcome in accomplishing 
 investment goals.
 
-### The Unknown Unknown
+#### The Unknown Unknown
 
 While retail investors can be capable of understanding the big picture, they generally do not have the time 
 nor the exposure to conduct comprehensive research to make specific investment decisions. For instance, 
@@ -43,7 +43,7 @@ products such as Zoom, the products further upstream such as various cloud hosti
 and chip manufacturers also experienced a boost in demand. However, for the retail investors, unless the area 
 happens to fall into their expertise, such information may be an unknown unknown to them. 
 
-### Staying up-to-date
+#### Staying up-to-date
 
 Investment opportunities are time-dependent and require up-to-date information. But, staying up-to-date while life 
 happens require constant effort. Suppose that an investor is interested in pharmaceutical sector, but making informed 
@@ -52,51 +52,48 @@ process of treatment procedures. But, not everyone has the
 time or energy to scan through news and documents on medical procedures after a long day at work and taking care 
 of family matters.
 
-### Democratizing the Market
+#### Democratizing the Market
 
 Generic ETFs and mutual funds are common solutions employed by retail investors to get a decent return without 
 having expert knowledge. Thus, the asset managers or index tracking algorithms are making decisions on behalf of a large 
 number of retail investors. In recent years, the growth of ESG suggests that investors may have additional interests, 
-such as delivering social impact, by means of their investment. The new interests beyond having a market level 
-return may entail the need to become better informed, and to take greater control of the investment decision into 
-their own hands.
+such as delivering social impact, by means of their investment. In addition, getting financial advice can be costly, 
+and the interest of the hired advisor may not truly be aligned with the interest of the investor.
 
 The aim of the project is to alleviate those pain-points by reducing the information asymmetry that leads to less efficient 
-investment choices by retail investors compared to a dedicated advisor or asset manager.
+investment choices by retail investors compared to a dedicated advisor or asset manager. Utilizing the power of AI, we provide 
+our users the power to quickly digest facts and insights from the vast collection of publically available financial news 
+articles 
 
-### Main Features
-- Answer any questions about business news and developments in a time frame
-- Summarize contextual information from different perspectives
-- Automatically pulling relevant financial metrics from companies
+### Current Features
+
+The main features for the project ordered by priority is given below:
+
+1. Answer any questions about business news and developments in a time frame
+2. Summarize contextual information from different perspectives
+3. Automatically pulling relevant financial metrics from companies
 - *TODO: Add more as we develop it further*
 
-## TODO: @Yif Add UI demo video/image/gif once ready
+## Project Implementation
 
-## Architecture/Tech
+In order to accomplish the goal of the project, the features can be seen as retrieval augmented generation problems. 
+While LLMs may encode prior knowledge from pre-training, it is difficult to control and to ensure the correctness of 
+the output. In addition, the prior knowledge of the model stops at the date when the pre-training stopped. Thus, 
+for the purpose of assisting the users with market research and advice, the approach taken was to create an envelope 
+around LLMs, feed the LLMs data required to perform tasks pretaining to the features, and make use of the domain knowledge 
+and reasoning ability of the LLMs to create the outputs for the users.
 
-### TODO: Make it more presentable
+### High Level Process Flow
 
-![Architecture](images/Subsystems.png)
+![Architecture](images/arch_high.png)
 
-### Tech Stack
+Our work to implement the process can be roughly divided into three main parts:
 
-#### Data Scraping
-- Selenium and/or Requests
-- Yahoo Finance API via yfinance
+- Data Ingestion: Scraping news articles and enriching them with additional information
+- Model Improvements: Fine-tuning the LLMs to achieve desired performance and output format
+- Output Generation: Generating outputs via LLMs and augmenting the output with additional information
 
-#### Data Storage
-- GCP Cloud Storage (scraped articles, intermediary results)
-- Elastic Search (Processed topics/article chunks)
-
-#### Model/Deployment
-- HuggingFace
-- Langchain
-- Flask
-
-#### UI
-- Streamlit
-
-### Data Enrichment
+### Data Ingestion
 
 #### Web Scraping for Data Collection ([scraper](scraper))
 - We've gathered data from prominent news sources, including CNBC, The New York Times, and Reuters, as part of the data collection phase. The [common.py](scraper/common.py) is a framework that serves as the backbone for the web scraper. It encapsulates the essential functionality of traversing HTML pages by following links, verifying if a URL has already been scraped, and progressing to the subsequent page.
