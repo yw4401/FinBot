@@ -112,7 +112,7 @@ the articles for output generation by chunking the article texts and indexing th
 - Eliminating these duplicate news articles is crucial to improve efficiency, prevent potential biases caused by redundant information, and ensure a more accurate representation of the data.
 - In this context, we've employed the MinHash LSH technique to effectively eliminate duplicate news articles from the dataset.
 
-#### Coreference Resolution for Text Simplification
+#### Coreference Resolution
 - The [coref_resolve_4.py](pipeline/coref_resolve_4.py) script utilizes a list of coreference clusters to transform a Spacy document into a string. 
 - In this transformation, each coreference is replaced with its primary mention
 - More emphasis on named entities, and preserves context on text chunking
@@ -121,14 +121,31 @@ the articles for output generation by chunking the article texts and indexing th
 - The primary objective of topic modeling ([extract_topics_5.py](pipeline/extract_topics_5.py)) is to ensure the retrieval of a diverse set of content segments. 
 - Typically, in semantic search, there's a possibility that the top segments retrieved could be quite similar. However, by introducing topics, it compels the system to select segments that cover distinct facets or angles of the subject matter, promoting a more comprehensive and well-rounded result set.
 - BERTopics is used to utilize the power of embeddings
-
-#### Topic Summarizer
 - The [summarize_topics_6.py](pipeline/summarize_topics_6.py) generates concise and coherent summaries of the theme for each topics
-- The summaries are used to compute embedding vectors on a topic level
-- The embedding vectors are used in output generation to identify the most important topic clusters
 
-#### Index Creation
-*TODO: Add Elastic Index once the code is stable*
+#### Text Chunking & NER
+- In order to make the most out of the context window for the LLMs, the article texts are split into chunks of up to 256 tokens
+- The chunk boundaries are determined by first splitting the text into sentences using Spacy, then merging the sentences.
+- For each chunks, a list of named entities are extracted using Spacy to allow for matching by entity during output generation.
+- The main processing code for this section is in the [build_vector_index_7.py](pipeline/build_vector_index_7.py)
+
+#### Index Creation/Text Embedding
+- Once all of the enrichment techniques are applied, a sentence transformer model is applied to each text chunk to create the associated embedding
+- Next, for each topic found, the summaries of the topics are converted into embeddings for relevant topic identification
+- An elastic search index containing the following information would be created for topic retrieval
+  - Topic Number
+  - Topic Summary
+  - Topic Summary Embedding
+  - Median Publication Date of Top Articles
+- An elastic search index containing the following information would be created for article text chunk retrieval
+  - Text Chunk Text
+  - Text Chunk Embedding
+  - Entities in Chunk
+  - Topic Number of the Chunk
+  - Publication Date
+- The associated code is located in [build_vector_index_7.py](pipeline/build_vector_index_7.py)
+
+Once the indices are built, the solution is ready to generate output for the users.
 
 ### Response Generation
 
