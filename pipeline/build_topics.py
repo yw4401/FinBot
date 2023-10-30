@@ -27,7 +27,7 @@ def get_topicless_articles(client: bq.Client):
             for r in cursor.fetchall():
                 results.append(list(r))
     return pd.DataFrame(results,
-                        columns=["id", "title", "body"])
+                        columns=["id", "title", "body", "published"])
 
 
 def identify_topics(df: pd.DataFrame):
