@@ -187,29 +187,19 @@ def remove_duplicate_nodes(lsh_similar_itemset):
 
     return nodes_to_remove
 
-
-if __name__ == "__main__":
-
-    year = 2023
-    month = 4
-
-    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
-                                                 file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
-    src_file = src_file.format(year=year, month=month)
-    src_df = pd.read_parquet(src_file)
-
+def execute_deduplication(src_df):
     # Remove duplicates based on columns: source, category, title and body
-    src_df = src_df.drop_duplicates(subset=['source', 'category', 'title', 'body']).copy()
+    src_df = src_df.drop_duplicates(subset=['source' ,'category','title', 'body']).copy()
     src_df.reset_index(drop=True, inplace=True)
 
-    src_df['doc_id'] = src_df.index
+    src_df['doc_id']=src_df.index
     doc_nr = src_df['doc_id'].max()
 
     print("Dataset loaded correctly.")
     print("Producing Shingles...")
     start_time = time.time()
 
-    shingling_list = [None] * (doc_nr + 1)
+    shingling_list = [None] * (doc_nr +1) 
     shingling_size = 10
     signature_size = 50
     bands_nr = 10
@@ -217,41 +207,56 @@ if __name__ == "__main__":
     shingler_inst = shingler(shingling_size)
     signer = minhashSigner(signature_size)
 
-    # produce hashed shinglings for all documents
+    #produce hashed shinglings for all documents
     for index, row in src_df.iterrows():
-        doc = row['title'] + " " + row['body']
+        doc = row['title']+" "+row['body']
         i = row['doc_id']
 
-        shinglings = shingler_inst.get_hashed_shingles(shingler_inst.get_shingles(doc))
+        shinglings = shingler_inst.get_hashed_shingles( shingler_inst.get_shingles(doc) )
         shingling_list[i] = shinglings
 
     end_time = time.time()
-    print("Shingles produced in:\t %.2f seconds." % (end_time - start_time))
+    print("Shingles produced in:\t %.2f seconds."%(end_time - start_time))
 
     start_time = time.time()
     print("Computing signature matrix...")
-    # produce a signature for each shingle set
-    signature_matrix = signer.compute_signature_matrix(shingling_list)
+    #produce a signature for each shingle set
+    signature_matrix = signer.compute_signature_matrix( shingling_list )
     end_time = time.time()
-    print("Signature Matrix computed in:\t %.2f seconds." % (end_time - start_time))
+    print("Signature Matrix computed in:\t %.2f seconds." %(end_time - start_time))
 
     lsh_instance = lsh(threshold=0.5)
     start_time = time.time()
     print("Computing LSH similarity...")
+    
+    print(isinstance(lsh_instance, lsh))
     lsh_similar_itemset = lsh_instance.get_similar_items(signature_matrix, bands_nr, signature_size)
     end_time = time.time()
     lsh_computation_time = end_time - start_time
-    print("LSH Similarity computed in:\t %.2f seconds.\nSimilar Elements Found: %d" % (
-    lsh_computation_time, len(lsh_similar_itemset)))
+    print("LSH Similarity computed in:\t %.2f seconds.\nSimilar Elements Found: %d" %(lsh_computation_time,len(lsh_similar_itemset)))
 
     # Remove duplicates from the graph and get the list of removed nodes
     removed_nodes = remove_duplicate_nodes(lsh_similar_itemset)
 
-    print("Number of duplicates: ", len(removed_nodes))
-
+    print("Number of duplicates: ",len(removed_nodes))
+    
     src_df = src_df[~src_df['doc_id'].isin(removed_nodes)]
+    
+    return src_df
 
+if __name__ == "__main__":
+    
+    year  = 2023
+    month = 4
+
+    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
+                                                     file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
+    src_file = src_file.format(year=year, month=month)
+    src_df = pd.read_parquet(src_file)
+
+    deduplicated_df = execute_deduplication(src_df)
+    
     target_url = "gs://{tgt_bucket}/{file}".format(tgt_bucket=config.ARTICLE_DEDUP_TARGET_BUCKET,
                                                    file=config.ARTICLE_DEDUP_FILE)
     target_url = target_url.format(year=year, month=month)
-    src_df.to_parquet(target_url, index=False)
+    deduplicated_df.to_parquet(target_url, index=False)
