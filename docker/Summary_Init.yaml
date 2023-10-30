@@ -1,0 +1,59 @@
+#cloud-config
+users:
+- name: summarizer
+  uid: 2000
+  groups: docker
+
+write_files:
+  - path: /etc/systemd/system/install-gpu.service
+    permissions: 0644
+    owner: root
+    content: |
+      [Unit]
+      Description=Install GPU drivers
+      Wants=gcr-online.target docker.socket
+      After=gcr-online.target docker.socket
+
+      [Service]
+      User=root
+      Type=oneshot
+      ExecStart=cos-extensions install gpu
+      StandardOutput=journal+console
+      StandardError=journal+console
+  - path: /etc/systemd/system/install-credentials.service
+    permissions: 0644
+    owner: root
+    content: |
+      [Unit]
+      Description=Install Docker Credentials
+      Wants=gcr-online.target docker.socket
+      After=gcr-online.target docker.socket
+
+      [Service]
+      User=summarizer
+      Type=oneshot
+      ExecStart=docker-credential-gcr configure-docker --registries us-central1-docker.pkg.dev
+      StandardOutput=journal+console
+      StandardError=journal+console
+  - path: /etc/systemd/system/summary.service
+    permissions: 0644
+    owner: root
+    content: |
+      [Unit]
+      Description=Run Container that Performs Targeted Summary
+      Requires=install-gpu.service install-credentials.service
+      After=install-gpu.service install-credentials.service
+
+      [Service]
+      User=summarizer
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/usr/bin/docker run --rm -p 80:80 --name=summarizer --shm-size=10gb --volume /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 --volume /var/lib/nvidia/bin:/usr/local/nvidia/bin --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia1:/dev/nvidia1 --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidiactl:/dev/nvidiactl us-central1-docker.pkg.dev/msca310019-capstone-f945/null-docker/mistral-sum:latest
+      StandardOutput=journal+console
+      StandardError=journal+console
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl start install-gpu.service
+  - systemctl start install-credentials.service
+  - systemctl start summary.service

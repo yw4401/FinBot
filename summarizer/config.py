@@ -45,11 +45,16 @@ ARTICLE_K = 2
 
 # Article Summary Response
 TOPIC_SUM_K = 5
-TOPIC_SUM_TOP_K = 3
-TOPIC_SUM_CHUNKS = 15
-TOPIC_SUM_SYSTEM = "Summarize the key-points from the given context. " \
-                   "The information in the summary should include, " \
-                   "but should not be limited to information that can help answer the given question. " \
-                   "Be concise if possible. " \
-                   'Respond with "IMPOSSIBLE" if the context does not contain information that can answer the given question.'
-TOPIC_SUM_USER = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"
+TOPIC_SUM_TOP_K = 2
+TOPIC_SUM_CHUNKS = 14
+TOPIC_SUM_PROMPT = """<|im_start|>system
+Summarize the key-points from the given context. The information in the summary should include, but should not be limited to information that can help answer the given question. Be concise if possible. Respond with "IMPOSSIBLE" if the context does not contain information that can answer the given question.
+<|im_end|>
+<|im_start|>user
+BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n<|im_end|>
+<|im_start|>assistant: """
+
+# Model Deployment
+SUM_API_SERVER = "http://34.42.68.229/v1"
+SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
+

@@ -54,9 +54,8 @@ def display_summary_response(text, period):
     st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
+    st.write("### You may be interested in:")
     for summary in response["summaries"]:
-        st.write(summary["title"])
-
         # Create bullet points for each keypoint
         for keypoint in summary["keypoints"]:
             st.markdown(f"- {keypoint}")
