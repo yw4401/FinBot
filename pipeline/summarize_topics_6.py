@@ -39,7 +39,7 @@ def select_titles(topic_df, topic, limiter, base_prompt):
     agg_text = ""
     row_format = "Published at: %s Title: %s\n"
     while limiter(prompt) and current_idx < end_idx:
-        timestamp = datetime.fromisoformat(topic_segment.iloc[current_idx]["published"])
+        timestamp = topic_segment.iloc[current_idx]["published"]
         timestamp_str = timestamp.strftime("%m/%d/%Y")
         agg_text = agg_text + row_format % (timestamp_str, topic_segment.iloc[current_idx]["title"])
         prompt = base_prompt.format(text=agg_text)
