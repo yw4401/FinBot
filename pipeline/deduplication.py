@@ -148,16 +148,16 @@ class lsh:
     def get_similar_items(self, sig_matrix, bands_nr, sign_len):
         similar_docs = set()
         # divide signature matrix into bands
-        bands = lsh_instance.get_signature_matrix_bands(sig_matrix, bands_nr, sign_len)
+        bands = self.get_signature_matrix_bands(sig_matrix, bands_nr, sign_len)
 
         # for all the bands
         for band_id, elements in bands.items():
             # produce the buckets for the given band (band_id) with a random hash function
-            buckets = lsh_instance.get_band_buckets(elements, hash_funct=hashFamily(randint(0, 10000000000)))
+            buckets = self.get_band_buckets(elements, hash_funct=hashFamily(randint(0, 10000000000)))
             # Get all the candidate pairs
-            candidates = lsh_instance.get_candidates_list(buckets)
+            candidates = self.get_candidates_list(buckets)
             # Check all candidate pairs' signatures
-            for sim_tuple in lsh_instance.check_candidates(candidates, self.threshold, sig_matrix):
+            for sim_tuple in self.check_candidates(candidates, self.threshold, sig_matrix):
                 similar_docs.add(sim_tuple)
 
         return similar_docs  # return all the similar signatures that respect the threshold
@@ -188,16 +188,7 @@ def remove_duplicate_nodes(lsh_similar_itemset):
     return nodes_to_remove
 
 
-if __name__ == "__main__":
-
-    year = 2023
-    month = 4
-
-    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
-                                                 file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
-    src_file = src_file.format(year=year, month=month)
-    src_df = pd.read_parquet(src_file)
-
+def execute_deduplication(src_df):
     # Remove duplicates based on columns: source, category, title and body
     src_df = src_df.drop_duplicates(subset=['source', 'category', 'title', 'body']).copy()
     src_df.reset_index(drop=True, inplace=True)
@@ -238,6 +229,8 @@ if __name__ == "__main__":
     lsh_instance = lsh(threshold=0.5)
     start_time = time.time()
     print("Computing LSH similarity...")
+
+    print(isinstance(lsh_instance, lsh))
     lsh_similar_itemset = lsh_instance.get_similar_items(signature_matrix, bands_nr, signature_size)
     end_time = time.time()
     lsh_computation_time = end_time - start_time
@@ -251,7 +244,21 @@ if __name__ == "__main__":
 
     src_df = src_df[~src_df['doc_id'].isin(removed_nodes)]
 
+    return src_df
+
+
+if __name__ == "__main__":
+    year = 2023
+    month = 4
+
+    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
+                                                 file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
+    src_file = src_file.format(year=year, month=month)
+    src_df = pd.read_parquet(src_file)
+
+    deduplicated_df = execute_deduplication(src_df)
+
     target_url = "gs://{tgt_bucket}/{file}".format(tgt_bucket=config.ARTICLE_DEDUP_TARGET_BUCKET,
                                                    file=config.ARTICLE_DEDUP_FILE)
     target_url = target_url.format(year=year, month=month)
-    src_df.to_parquet(target_url, index=False)
+    deduplicated_df.to_parquet(target_url, index=False)

@@ -139,6 +139,24 @@ def coref_text(article, predictor, nlp):
         return None
 
 
+def add_coreference_resolution(df, predictor, nlp):
+    body = []
+    with tqdm(total=len(df.index)) as progress:
+        for article in df.body:
+            corref_body = ""
+            if article and len(article.strip()) > 0:
+                corref_body = coref_text(article, predictor, nlp)
+            if corref_body:
+                body.append(corref_body)
+            else:
+                body.append("ERROR")
+            progress.update(1)
+
+    df["coref"] = body
+    df = df.loc[df.coref != "ERROR"]
+    return df
+
+
 if __name__ == "__main__":
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
     spacy.require_cpu()

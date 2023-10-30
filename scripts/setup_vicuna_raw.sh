@@ -4,7 +4,7 @@ echo "\nSetting Up New Environment for Vicuna\n"
 
 conda create -n vicuna python=3.10 -y
 conda run -n vicuna conda install ipykernel -y
-conda run -n vicuna conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c "nvidia/label/cuda-11.7.1" -y
+conda run -n vicuna conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c "nvidia/label/cuda-11.8.0" -y
 conda run -n vicuna conda install -c conda-forge ipywidgets -y
 conda run -n vicuna  conda install -c conda-forge transformers -y
 conda run -n vicuna pip install fschat
