@@ -28,8 +28,8 @@ def select_titles(topic_df, topic, limiter, base_prompt):
     determine if it is too big.
     """
 
-    topic_segment = topic_df.loc[topic_df.topic == topic][["title", "published", "probability"]].sort_values(
-        by="probability", ascending=False)
+    topic_segment = topic_df.loc[topic_df.topic == topic][["title", "published", "topic_prob"]].sort_values(
+        by="topic_prob", ascending=False)
     if len(topic_segment.index) == 0:
         raise KeyError("Invalid Topic: " + str(topic))
 
