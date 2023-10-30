@@ -13,7 +13,7 @@ import config
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
 
-from pipeline.summarize_topics_6 import summarization_wrapper, create_topic_summarizer, create_palm2_chain
+from summarize_topics_6 import summarization_wrapper, create_topic_summarizer, create_palm2_chain
 
 
 def get_topicless_articles(client: bq.Client):
