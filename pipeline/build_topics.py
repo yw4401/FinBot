@@ -17,7 +17,7 @@ from summarize_topics_6 import summarization_wrapper, create_topic_summarizer, c
 
 
 def get_topicless_articles(client: bq.Client):
-    query = "SELECT id, title, body " \
+    query = "SELECT id, title, body, published " \
             "FROM Articles.CleanedArticles WHERE topic IS NULL"
     results = []
 
