@@ -55,6 +55,6 @@ BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n<|im_end|>
 <|im_start|>assistant: """
 
 # Model Deployment
-SUM_API_SERVER = "http://10.142.190.206/v1"
+SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
 
