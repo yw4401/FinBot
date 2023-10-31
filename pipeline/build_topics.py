@@ -8,6 +8,7 @@ from hdbscan import HDBSCAN
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 from bertopic import BERTopic
+from google.oauth2 import service_account
 from bertopic.vectorizers import ClassTfidfTransformer
 import config
 import google.cloud.bigquery as bq
@@ -61,7 +62,8 @@ def identify_topics(df: pd.DataFrame):
 
 def summarize_topics(df: pd.DataFrame, jobs=7):
     topics = list(set(df.topic.unique()))
-    summarizer = create_topic_summarizer("lc", chain=create_palm2_chain(credentials=None),
+    credentials = service_account.Credentials.from_service_account_file(config.VERTEX_AI_KEY_PATH)
+    summarizer = create_topic_summarizer("lc", chain=create_palm2_chain(credentials=credentials),
                                          adapter=lambda x: x["text"]["summary"].strip())
     parallel = Parallel(n_jobs=jobs, backend="threading", return_as="generator")
     topic_sum = pd.DataFrame({
@@ -72,7 +74,7 @@ def summarize_topics(df: pd.DataFrame, jobs=7):
     with tqdm(total=len(topics)) as progress:
         for i, (w, summary) in enumerate(
                 parallel(delayed(summarization_wrapper)(summarizer, work, df) for work in topics)):
-            topic_sum.loc[topic_sum.topics == w, "summary"] = summary
+            topic_sum.loc[topic_sum.topic == w, "summary"] = summary
             progress.update(1)
             if i % 10 == 0:
                 print(summary)
@@ -90,6 +92,7 @@ def write_topics(topic_df: pd.DataFrame, sum_df, project):
             cursor.executemany(upd_stmt,
                                [(row["topic"], row["topic_prob"], row["id"]) for _, row in topic_df.iterrows()])
             cursor.executemany(ins_stmt, [(row["topic"], row["summary"]) for _, row in sum_df.iterrows()])
+        connection.commit()
     return True
 
 

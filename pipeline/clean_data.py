@@ -8,15 +8,16 @@ import torch
 
 from deduplication import execute_deduplication
 import config
-from pipeline.coref_resolve import add_coreference_resolution
+from coref_resolve import add_coreference_resolution
 from allennlp.predictors.predictor import Predictor
 from joblib import delayed, Parallel
 from tqdm import tqdm
 
 
 def get_scraped_articles(client: bq.Client):
-    query = "SELECT id, url, source, title, published, body, summary, summary_type, category " \
-            "FROM Articles.ScrapedArticles WHERE published >= TIMESTAMP('2023-09-01 00:00:00')"
+    query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
+            "FROM Articles.ScrapedArticles AS SA LEFT JOIN Articles.CleanedArticles CA ON SA.id = CA.id " \
+            "WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY) AND CA.id IS NULL"
     results = []
 
     with closing(bqapi.Connection(client=client)) as connection:
@@ -30,16 +31,12 @@ def get_scraped_articles(client: bq.Client):
 
 
 def write_batch(project, batch):
-    # stmt = """
-    #         INSERT INTO Articles.CleanedArticles SELECT nid, %s, %s, %s, %s, %s, %s, %s, %s, %s FROM (SELECT %s as nid)
-    #         LEFT JOIN Articles.CleanedArticles A ON A.id = nid
-    #         WHERE A.id IS NULL;
-    #         """
     stmt = """INSERT INTO Articles.CleanedArticles VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
     client = bq.Client(project=project, credentials=None)
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
             cursor.executemany(stmt, batch)
+        connection.commit()
     return True
 
 
@@ -60,7 +57,6 @@ def write_coref_articles(project, df, batch=10, jobs=8):
 if __name__ == "__main__":
     client = bq.Client(project=config.GCP_PROJECT, credentials=None)
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
-    spacy.require_cpu()
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
 
     src_df = get_scraped_articles(client)
