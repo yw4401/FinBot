@@ -12,7 +12,7 @@ conda run -n clean_data pip install -U numpy
 
 echo "Activating environment"
 
-conda run -n vicuna ipython kernel install --user --name=clean_data
+conda run -n clean_data ipython kernel install --user --name=clean_data
 
 
 
