@@ -1,16 +1,13 @@
 import logging
-from datetime import datetime
+import time
 
-import pandas as pd
 import tiktoken
 import torch
-from google.oauth2 import service_account
-from joblib import Parallel, delayed
+from google.api_core.exceptions import ResourceExhausted, InternalServerError
 from langchain.chains import LLMChain
 from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.output_parsers import RegexParser
-from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatMessagePromptTemplate, \
-    ChatPromptTemplate
+from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 
@@ -128,5 +125,9 @@ def create_openai_chain(key, max_token=1024):
 
 
 def summarization_wrapper(summarizer, work, topic_df):
-    summary = summarizer(topic_df, work)
-    return work, summary
+    while True:
+        try:
+            summary = summarizer(topic_df, work)
+            return work, summary
+        except (ResourceExhausted, InternalServerError):
+            time.sleep(1)

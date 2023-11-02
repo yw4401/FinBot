@@ -7,7 +7,6 @@ import google.cloud.bigquery.dbapi as bqapi
 import joblib
 import pandas as pd
 from google.api_core.exceptions import InvalidArgument, ResourceExhausted, InternalServerError
-from google.oauth2 import service_account
 from langchain.chains import LLMChain, SimpleSequentialChain
 from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
