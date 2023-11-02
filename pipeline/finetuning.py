@@ -18,7 +18,7 @@ from tqdm import tqdm
 import numpy as np
 
 import config
-from pipeline.build_vector_index import create_splitter
+from build_vector_index import create_splitter
 
 tqdm.pandas()
 
