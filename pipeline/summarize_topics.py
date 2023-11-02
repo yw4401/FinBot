@@ -130,35 +130,3 @@ def create_openai_chain(key, max_token=1024):
 def summarization_wrapper(summarizer, work, topic_df):
     summary = summarizer(topic_df, work)
     return work, summary
-
-
-if __name__ == "__main__":
-    year = 2023
-    month = 4
-    jobs = 4
-
-    credentials = service_account.Credentials.from_service_account_file(config.VERTEX_AI_KEY_PATH)
-    src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
-                                            file=config.TOPIC_SUBSAMPLE_FILE)
-    topic_df = pd.read_parquet(src_url.format(year=year, month=month))
-    topics = list(set(topic_df.topic.unique()))
-
-    summarizer = create_topic_summarizer("lc", chain=create_palm2_chain(credentials),
-                                         adapter=lambda x: x["text"]["summary"].strip())
-    target_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUM_TARGET,
-                                               file=config.TOPIC_SUM_TARGET_FILE)
-    topic_sum = pd.DataFrame({
-        "topics": topics,
-        "summary": ["" for _ in topics]
-    })
-
-    parallel = Parallel(n_jobs=jobs, backend="threading", return_as="generator")
-    with tqdm(total=len(topics)) as progress:
-        for i, (w, summary) in enumerate(parallel(delayed(summarization_wrapper)(summarizer, work, topic_df) for work in topics)):
-            topic_sum.loc[topic_sum.topics == w, "summary"] = summary
-            progress.update(1)
-            if i % 10 == 0:
-                print(summary)
-                topic_sum.to_parquet(target_url.format(year=year, month=month),
-                                     index=False)
-    topic_sum.to_parquet(target_url.format(year=year, month=month), index=False)

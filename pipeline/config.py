@@ -2,33 +2,20 @@ GCP_PROJECT = "msca310019-capstone-f945"
 
 # Article Ingestion
 ARTICLE_INGEST_MAX_DAYS = 30 * 7
-ARTICLE_TARGET_BUCKET = "consolidated-articles"
-ARTICLE_CONVERT_META_BUCKET = "meta-info"
-ARTICLE_CONVERT_META_IDX = "scraper-markdown-index.json"
-ARTICLE_BUCKET_IDX = "index.json"
 ARTICLE_CONVERT_CHUNK = 100
 ARTICLE_CONVERT_CNBC_DATE = "%Y-%m-%dT%H:%M:%S%z"
 ARTICLE_CONVERT_REUTER_DATE = "%B %d, %Y %I:%M %p"
 ARTICLE_CONVERT_NYT_DATE = "%Y-%m-%dT%H:%M:%S%z"
-ARTICLE_CONVERT_SUBSAMPLE_TARGET = "scraped-news-article-data-null"
-ARTICLE_CONVERT_SUBSAMPLE_FILE = "subsample-{year}-{month}.parquet"
-ARTICLE_CONVERT_SUBSAMPLE_IDX = "scraper-subsample.json"
-
-# Deduplication
-ARTICLE_DEDUP_TARGET_BUCKET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
-ARTICLE_DEDUP_FILE = "dedup-{year}-{month}.parquet"
 
 # Fine-tuning Ingestion
 FINE_TUNE_TARGET_BUCKET = "scraped-news-article-data-null"
+FINE_TUNE_FILTERED = "fine-tune-filtered.parquet"
+FINE_TUNE_COREF = "fine-tune-coref.parquet"
 FINE_TUNE_FILE_PATTERN = "fine-tune-summary-{split}.parquet"
-FINE_TUNE_FILE_CHUNK = 64
 
 # Co-reference Resolution
-ARTICLE_COREF_SRC_BUCKET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
 ARTICLE_COREF_MOD_URL = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2021.03.10.tar.gz"
 ARTICLE_COREF_SPACY_MOD = "en_core_web_sm"
-ARTICLE_COREF_TARGET_BUCKET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
-ARTICLE_COREF_FILE_PATTERN = "corref-{year}-{month}.parquet"
 
 # Topic Extraction
 TOPIC_BUCKET = "topic-models-null"
@@ -41,12 +28,8 @@ TOPIC_UMAP_MIN_DIST = 0
 TOPIC_UMAP_METRIC = "euclidean"
 TOPIC_HDBSCAN_MIN_SIZE = 5
 TOPIC_HDBSCAN_METRIC = "euclidean"
-TOPIC_SUBSAMPLE_TARGET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
-TOPIC_SUBSAMPLE_FILE = "topic-{year}-{month}.parquet"
 
 # Topic Summarization
-TOPIC_SUM_TARGET = "scraped-news-article-data-null"
-TOPIC_SUM_TARGET_FILE = "topicsum-{year}-{month}.parquet"
 TOPIC_SUM_HF_PROMPT = "summarize in bullet points:\n{text}"
 TOPIC_SUM_LC_SYSTEM_PROMPT = "A list of news article titles with the published time is given below. " + \
                              "Using only the provided information, summarize the theme of the titles such that it will be easy to answer investing related questions from the summary. " + \
@@ -177,3 +160,88 @@ QUESTION: What are some legal risks that Anthropic is currently facing?""",
 SUMMARY_AUG_PARSE_USER = "{text}"
 SUMMARY_AUG_MODEL = "chat-bison"
 SUMMARY_AUG_TEMPERATURE = 0
+
+# AI Assisted Summary Rewriting
+OPENAI_KEY_PATH = "../key"
+SUMMARY_REWRITE_SYSTEM = "You are a helpful AI assistant that will rewrite keypoints summary from a news article " \
+                         "given a specific published date and article title " \
+                         "so that it does not use " \
+                         "any relative time such as 'yesterday', 'last week', 'this quarter' etc. In addition, " \
+                         "ensure that the re-written keypoints can be read and understood clearly " \
+                         "regardless of whether the title or published date is present. " \
+                         "DO NOT add any information not conveyed in the original text. " \
+                         "DO NOT add any information about specific dates unless it was in the original text.\n" \
+                         "An example:\n" \
+                         "Title: Microsoft beats earning and lead stock rallies\n"\
+                         "Date: 2023-10-31, Tuesday\n" \
+                         "Text:\n" \
+                         "* Stock rallies today morning as Microsoft beats earning from last quarter\n" \
+                         "* New CEO Sneed joined Microsoft from Google\n" \
+                         "* This year is the year of the AI revenue, expert says\n" \
+                         "* Spokesperson also mentioned revenues from Q2 on Monday this week\n" \
+                         "* Last week, the stock was impacted by lawsuits over AI copyright issues\n\n" \
+                         "Response:\n" \
+                         "* Stocks rallied on the morning of 2023-10-31 as Microsoft beats earning from 2023 Q3\n" \
+                         "* It was reported on 2023-10-31 that new CEO Sneed joined Microsoft from Google\n" \
+                         "* 2023 is the year of the AI revenue, expert says\n" \
+                         "* Spokesperson from Microsoft also mentioned revenues from 2023 Q2 on 2023-10-30\n" \
+                         "* On the week of 2023-10-22, Microsoft stock was impacted by lawsuits over AI copyright issues\n\n" \
+                         "An example:\n" \
+                         "Title: Oil exploration worker wage talks failed to reach a conclusion\n" \
+                         "Date: 2023-05-24, Wednesday\n" \
+                         "Text:\n" \
+                         "* Workers' wage talks break down\n" \
+                         "* No strike allowed before mediation talks scheduled in June\n" \
+                         "* Risk of strike later this year if mediation fails\n" \
+                         "* Production workers separately agreed deal this month\n\n" \
+                         "Response:\n" \
+                         "* Oil exploration workers' wage talks break down, report on 2023-05-24 says\n" \
+                         "* No strike allowed for the workers before mediation talks scheduled in June, 2023\n" \
+                         "* Risk of strike later in 2023 if mediation fails\n" \
+                         "* Production workers separately agreed deal in May 2023\n\n" \
+                         "Begin."
+SUMMARY_REWRITE_USER = "Title: {title}\nDate: {date}\nText:\n{ipt_text}"
+
+# AI Assisted Summary Filtering
+SUMMARY_FILTER_SYSTEM = "You are a helpful AI assistant that will determine whether the given summary is relevant to a " \
+                        "retail investor interested in different financial assets. Then, you will determine if the " \
+                        "summary talks about the movement of share prices, index, or information that can easily " \
+                        "be extracted from a stock screener. For each determination, " \
+                        "first give the reasoning, then given the judgement. You should format your response according " \
+                        "to the following examples:\nUser:\n" \
+                        "* Stock rallies today morning as Microsoft beats earning from last quarter\n" \
+                        "* New CEO Sneed joined Microsoft from Google\n" \
+                        "* This year is the year of the AI revenue, expert says\n" \
+                        "* Spokesperson also mentioned revenues from Q2 on Monday this week\n" \
+                        "* Last week, the stock was impacted by lawsuits over AI copyright issues\n\nAI Assistant:\n" \
+                        "REASON FOR RELEVANCE TO INVESTOR: The summary mentions the increase in revenue from AI, " \
+                        "as well as potential risks such as copyright concerns over generated contents. In addition, " \
+                        "it talks about new CEO Sneed, who joined Microsoft from Google. Thus, the summary would be " \
+                        "relevant to an investor interested in investing in AI, and the change in CEO is a significant " \
+                        "event for Microsoft, which investors would look into.\nVERDICT FOR RELEVANT TO INVESTOR, True or False: True\n\n" \
+                        "REASON FOR WHETHER MOVEMENT MENTIONED: The summary talks about the stocks rallying today.\n" \
+                        "VERDICT FOR STATISTICS MENTIONED, True or False: True\n\n" \
+                        "An example:\n" \
+                        "User:\n" \
+                        "* Oil exploration workers' wage talks break down\n" \
+                        "* No strike allowed before mediation talks scheduled in June\n" \
+                        "* Risk of strike later this year if mediation fails\n" \
+                        "* Production workers separately agreed deal this month\n\n" \
+                        "AI Assistant:\n" \
+                        "REASON FOR RELEVANCE TO INVESTOR: The summary mentions potential risk of strikes for the oil " \
+                        "exploration workers, which may impact the oil and gas industry. " \
+                        "Thus, investors in oil and gas industry would be interested to know about this risk" \
+                        "VERDICT FOR RELEVANT TO INVESTOR, True or False: True\n\n" \
+                        "REASON FOR WHETHER MOVEMENT MENTIONED: The summary does not mention any change in stock or index\n" \
+                        "VERDICT FOR MOVEMENT MENTIONED, True or False: False\n\nBegin."
+SUMMARY_FILTER_USER = "{summary}"
+
+# Creating Summary Titles
+SUMMARY_SUMMARY_SYSTEM = "You are a helpful AI assistant that will rewrite the given keypoints so that it includes a one line headline at the beginning. " \
+                         "An example:\nKeypoints:\n" \
+                         "* Universal Music has sued Anthropic, the AI startup, over “systematic and widespread infringement of their copyrighted song lyrics,” per a filing Wednesday in a Tennessee federal court.\n" \
+                         "* Anthropic, the $4.1 billion startup behind Claude the chatbot, was founded in 2021 by former OpenAI research executives.\n" \
+                         "* Other music publishers, such as Concord and ABKCO, were also named as plaintiffs.\n\n" \
+                         "Response:\n" \
+                         "Anthropic’s AI chatbot Claude is posting lyrics to popular songs, lawsuit claims"
+SUMMARY_SUMMARY_USER = "{summary}"

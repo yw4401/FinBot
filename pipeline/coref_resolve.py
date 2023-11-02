@@ -155,34 +155,3 @@ def add_coreference_resolution(df, predictor, nlp):
     df["coref"] = body
     df = df.loc[df.coref != "ERROR"]
     return df
-
-
-if __name__ == "__main__":
-    predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
-    spacy.require_cpu()
-    nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
-    year = 2023
-    month = 4
-
-    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_DEDUP_TARGET_BUCKET,
-                                                 file=config.ARTICLE_DEDUP_FILE)
-    src_file = src_file.format(year=year, month=month)
-    src_df = pd.read_parquet(src_file)
-    body = []
-    with tqdm(total=len(src_df.index)) as progress:
-        for article in src_df.body:
-            corref_body = ""
-            if article and len(article.strip()) > 0:
-                corref_body = coref_text(article, predictor, nlp)
-            if corref_body:
-                body.append(corref_body)
-            else:
-                body.append("ERROR")
-            progress.update(1)
-
-    src_df["body"] = body
-    src_df = src_df.loc[src_df.body != "ERROR"]
-    target_url = "gs://{tgt_bucket}/{file}".format(tgt_bucket=config.ARTICLE_COREF_TARGET_BUCKET,
-                                                   file=config.ARTICLE_COREF_FILE_PATTERN)
-    target_url = target_url.format(year=year, month=month)
-    src_df.to_parquet(target_url, index=False)

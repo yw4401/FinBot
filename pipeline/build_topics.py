@@ -16,7 +16,7 @@ import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
 
 from pipeline.common import download_blob, upload_blob, BigquerySession
-from summarize_topics_6 import summarization_wrapper, create_topic_summarizer, create_palm2_chain
+from summarize_topics import summarization_wrapper, create_topic_summarizer, create_palm2_chain
 import shutil
 import uuid
 import gc

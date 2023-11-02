@@ -245,20 +245,3 @@ def execute_deduplication(src_df):
     src_df = src_df[~src_df['doc_id'].isin(removed_nodes)]
 
     return src_df
-
-
-if __name__ == "__main__":
-    year = 2023
-    month = 4
-
-    src_file = "gs://{src_bucket}/{file}".format(src_bucket=config.ARTICLE_CONVERT_SUBSAMPLE_TARGET,
-                                                 file=config.ARTICLE_CONVERT_SUBSAMPLE_FILE)
-    src_file = src_file.format(year=year, month=month)
-    src_df = pd.read_parquet(src_file)
-
-    deduplicated_df = execute_deduplication(src_df)
-
-    target_url = "gs://{tgt_bucket}/{file}".format(tgt_bucket=config.ARTICLE_DEDUP_TARGET_BUCKET,
-                                                   file=config.ARTICLE_DEDUP_FILE)
-    target_url = target_url.format(year=year, month=month)
-    deduplicated_df.to_parquet(target_url, index=False)
