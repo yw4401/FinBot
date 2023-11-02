@@ -7,7 +7,7 @@ import torch
 from google.oauth2 import service_account
 from joblib import Parallel, delayed
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatVertexAI
+from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.output_parsers import RegexParser
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatMessagePromptTemplate, \
     ChatPromptTemplate
@@ -105,17 +105,26 @@ def create_topic_summarizer(kind="lc", **kwargs):
     raise ValueError("Invalid kind: " + kind)
 
 
+def create_chat_chain(llm):
+    output_parser = RegexParser(regex=config.TOPIC_SUM_LC_REGEX, output_keys=["summary"])
+    system = SystemMessagePromptTemplate.from_template(config.TOPIC_SUM_LC_SYSTEM_PROMPT)
+    user = HumanMessagePromptTemplate.from_template(config.TOPIC_SUM_LC_USER_PROMPT)
+    prompt = ChatPromptTemplate.from_messages([system, user])
+    return LLMChain(llm=llm, prompt=prompt, output_parser=output_parser)
+
+
 def create_palm2_chain(credentials, max_output_tokens=1024):
     plan_llm = ChatVertexAI(temperature=0,
                             model_name="chat-bison",
                             credentials=credentials,
                             project=config.VERTEX_AI_PROJECT,
                             max_output_tokens=max_output_tokens)
-    output_parser = RegexParser(regex=config.TOPIC_SUM_LC_REGEX, output_keys=["summary"])
-    system = SystemMessagePromptTemplate.from_template(config.TOPIC_SUM_LC_SYSTEM_PROMPT)
-    user = HumanMessagePromptTemplate.from_template(config.TOPIC_SUM_LC_USER_PROMPT)
-    prompt = ChatPromptTemplate.from_messages([system, user])
-    return LLMChain(llm=plan_llm, prompt=prompt, output_parser=output_parser)
+    return create_chat_chain(plan_llm)
+
+
+def create_openai_chain(key, max_token=1024):
+    llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key, temperature=0, max_tokens=max_token)
+    return create_chat_chain(llm)
 
 
 def summarization_wrapper(summarizer, work, topic_df):

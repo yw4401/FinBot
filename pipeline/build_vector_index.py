@@ -1,20 +1,19 @@
-import datetime
-import shutil
-from pathlib import Path
+from contextlib import closing
 
-import chromadb
+import datetime
+
 import pandas as pd
 import spacy
 import torch
-from chromadb.utils import embedding_functions
 from elasticsearch import Elasticsearch, NotFoundError
 from langchain.text_splitter import SpacyTextSplitter
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 from transformers import AutoTokenizer
+import google.cloud.bigquery as bq
+import google.cloud.bigquery.dbapi as bqapi
 
 import config
-from common import upload_blob
 
 tqdm.pandas()
 if torch.cuda.is_available():
@@ -81,85 +80,21 @@ def preprocess_articles(article_df, splitter):
     return article_df
 
 
-def build_chroma_articles_index(year, month):
-    src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
-                                            file=config.TOPIC_SUBSAMPLE_FILE)
-    splitter = create_splitter()
-    article_df = pd.read_parquet(src_url.format(year=year, month=month))
-    article_df = preprocess_articles(article_df, splitter)
-
-    chroma_client = chromadb.PersistentClient(path=str(Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "articles")))
-    chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.ARTICLE_FAISS_EMBEDDING,
-                                                                            device=device)
-    article_col = chroma_client.get_or_create_collection(name=config.ARTICLE_DB_COLLECTION,
-                                                         embedding_function=chroma_embed)
-
-    documents = []
-    meta_datas = []
-    ids = []
-    cur_id = 0
-
-    for i, row in article_df.iterrows():
-        for chunk_idx, c in enumerate(row["chunks"]):
-            documents.append(c)
-            meta_datas.append(get_doc_chroma_meta(row, chunk_idx))
-            ids.append(str(cur_id))
-            cur_id += 1
-
-    article_col.add(ids=ids, documents=documents, metadatas=meta_datas)
-
-    final_dir = Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "articles")
-    final_file = Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "target")
-    dest_file = config.ARTICLE_FAISS_FILE.format(year=year, month=month)
-    shutil.make_archive(final_file, 'zip', final_dir)
-    upload_blob(bucket_name=config.ARTICLE_FAISS_TARGET,
-                source_file_name=Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "target.zip"),
-                destination_blob_name=dest_file, generation=None)
-
-
-def build_chroma_topic_index(year, month):
-    src_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUM_TARGET,
-                                            file=config.TOPIC_SUM_TARGET_FILE)
-    topic_sum_df = pd.read_parquet(src_url.format(year=year, month=month))
-
-    chroma_client = chromadb.PersistentClient(path=str(Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "topics")))
-    chroma_embed = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=config.ARTICLE_FAISS_EMBEDDING,
-                                                                            device="cuda")
-    topic_col = chroma_client.get_or_create_collection(name=config.TOPICS_DB_COLLECTION,
-                                                       embedding_function=chroma_embed)
-
-    documents = []
-    ids = []
-
-    for r, row in topic_sum_df.iterrows():
-        documents.append(row["summary"])
-        ids.append(str(row["topics"]))
-
-    topic_col.add(ids=ids, documents=documents)
-
-    final_file = Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "topics_target")
-    final_dir = Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "topics")
-    shutil.make_archive(final_file, 'zip', final_dir)
-    dest_file = config.TOPIC_FAISS_FILE.format(year=year, month=month)
-    upload_blob(bucket_name=config.TOPIC_FAISS_TARGET,
-                source_file_name=Path(config.ARTICLE_FAISS_TEMP_DIRECTORY, "topics_target.zip"),
-                destination_blob_name=dest_file, generation=None)
-
-
 def create_es_topic_doc(encoder: SentenceTransformer, row):
     embedding = encoder.encode(row["summary"])
     return {
         "description": row["summary"],
         "description_embedding": embedding.tolist(),
         "metadata": {
-            "topic": int(row["topics"]),
-            "created_at": row["created_at"],
+            "topic": int(row["topic"]),
+            "model": int(row["model"]),
+            "recency": row["recency"],
         }
     }
 
 
 def create_es_topic_idx(client: Elasticsearch, encoder, topic_sum_df):
-    topic_id_format = "{topic_created_at}-{topic_num}"
+    topic_id_format = "{topic_model}-{topic_num}"
     try:
         client.indices.get(index=config.ES_TOPIC_INDEX)
     except NotFoundError as e:
@@ -168,7 +103,7 @@ def create_es_topic_idx(client: Elasticsearch, encoder, topic_sum_df):
 
     with tqdm(total=topic_sum_df.shape[0]) as progress:
         for i, topic in topic_sum_df.iterrows():
-            doc_id = topic_id_format.format(topic_created_at=topic["created_at"], topic_num=topic["topics"])
+            doc_id = topic_id_format.format(topic_model=topic["model"], topic_num=topic["topic"])
             client.update(index=config.ES_TOPIC_INDEX, id=doc_id,
                           doc=create_es_topic_doc(encoder, topic), doc_as_upsert=True)
             progress.update(1)
@@ -176,8 +111,7 @@ def create_es_topic_idx(client: Elasticsearch, encoder, topic_sum_df):
 
 def create_es_chunk_docs(encoder: SentenceTransformer, row):
     embeddings = encoder.encode(row["chunks"])
-    published = datetime.datetime.fromisoformat(row["published"]).replace(tzinfo=datetime.timezone.utc)
-    published = published.strftime('%Y-%m-%d')
+    published = row["published"].replace(tzinfo=datetime.timezone.utc).strftime('%Y-%m-%d')
     for i, chunk in enumerate(row["chunks"]):
         chunk_id = "{article_id}-{chunk_idx}".format(article_id=row["id"], chunk_idx=i)
         yield chunk_id, {
@@ -186,7 +120,8 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
             "metadata": {
                 "entities": " ".join(row["entities"][i]),
                 "published_at": published,
-                "topic": int(row["topic"])
+                "topic": int(row["topic"]),
+                "model": int(row["model"])
             }
         }
 
@@ -194,7 +129,7 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
 def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
     try:
         client.indices.get(index=config.ES_ARTICLE_INDEX)
-    except NotFoundError as e:
+    except NotFoundError:
         client.indices.create(index=config.ES_ARTICLE_INDEX, mappings=config.ES_ARTICLES_MAPPING)
         client.indices.get(index=config.ES_ARTICLE_INDEX)
 
@@ -207,25 +142,54 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
             progress.update(1)
 
 
-if __name__ == "__main__":
-    year = 2023
-    month = 4
+def get_unindexed_topics(client: bq.Client):
+    query = "SELECT TS.model, TS.topic, TDT.recency, TS.summary FROM "\
+                f"(SELECT TAT.model as model, TAT.topic as topic, " \
+                f"timestamp_seconds(cast(avg(unix_seconds(CA.published)) as int64)) AS recency " \
+                f"FROM Articles.ArticleTopic AS TAT, Articles.CleanedArticles AS CA " \
+                f"WHERE TAT.article_id = CA.id AND TAT.topic_prob >= {config.TOPIC_EMBED_TOP_THRESHOLD} " \
+                f"GROUP BY TAT.model, TAT.topic) AS TDT, " \
+            f"Articles.TopicSummary AS TS, " \
+                f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM " \
+                f"WHERE NOT TM.servable GROUP BY TM.id) AS NM " \
+            f"WHERE NM.id = TDT.model AND TDT.model = TS.model AND TDT.topic = TS.topic ORDER BY TS.topic ASC"
+    result = []
+    with closing(bqapi.Connection(client=client)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(query)
+            for r in cursor.fetchall():
+                result.append(list(r))
 
+    return pd.DataFrame(result, columns=["model", "topic", "recency", "summary"])
+
+
+def get_articles_by_topics(client: bq.Client, model):
+    query = "SELECT CA.id, CA.published, CA.source, CA.body, ACT.topic FROM Articles.CleanedArticles AS CA, " \
+            "Articles.ArticleTopic ACT " \
+            "WHERE CA.id = ACT.article_id AND ACT.model = %s"
+    result = []
+    with closing(bqapi.Connection(client=client)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(query, (int(model), ))
+            for r in cursor.fetchall():
+                result.append(list(r))
+    result_df = pd.DataFrame(result, columns=["id", "published", "source", "body", "topic"])
+    result_df["model"] = model
+    return result_df
+
+
+if __name__ == "__main__":
     with open(config.ES_KEY_PATH, "r") as fp:
         es_key = fp.read().strip()
     with open(config.ES_CLOUD_ID_PATH, "r") as fp:
         es_id = fp.read().strip()
     elastic_client = Elasticsearch(cloud_id=es_id, api_key=es_key)
     encoder = SentenceTransformer(model_name_or_path=config.TOPIC_FAISS_EMBEDDING, device=device)
-    topic_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUM_TARGET,
-                                              file=config.TOPIC_SUM_TARGET_FILE)
-    topic_sum_df = pd.read_parquet(topic_url.format(year=year, month=month))
-    topic_sum_df["created_at"] = f"{year}-{month:02d}-30"
-    article_url = "gs://{bucket}/{file}".format(bucket=config.TOPIC_SUBSAMPLE_TARGET,
-                                                file=config.TOPIC_SUBSAMPLE_FILE)
-    article_df = pd.read_parquet(article_url.format(year=year, month=month))
 
-    print("Building Topic Indices")
-    create_es_topic_idx(client=elastic_client, encoder=encoder, topic_sum_df=topic_sum_df)
-    print("Building Article Indices")
-    create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df)
+    with closing(bq.Client(project=config.GCP_PROJECT)) as client:
+        topic_df = get_unindexed_topics(client=client)
+        article_df = get_articles_by_topics(client=client, model=topic_df.model.iloc[0])
+        print("Building Topic Indices")
+        create_es_topic_idx(client=elastic_client, encoder=encoder, topic_sum_df=topic_df)
+        print("Building Article Indices")
+        create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df)

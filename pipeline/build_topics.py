@@ -1,3 +1,4 @@
+import os
 from contextlib import closing
 
 import pandas as pd
@@ -14,21 +15,41 @@ import config
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
 
+from pipeline.common import download_blob, upload_blob, BigquerySession
 from summarize_topics_6 import summarization_wrapper, create_topic_summarizer, create_palm2_chain
+import shutil
+import uuid
+import gc
 
 
-def get_topicless_articles(client: bq.Client):
-    query = "SELECT id, title, body, published " \
-            "FROM Articles.CleanedArticles WHERE topic IS NULL"
+def get_topicless_articles(client, model):
+    query = "SELECT CA.id, CA.title, CA.body, CA.published " \
+            "FROM Articles.CleanedArticles AS CA LEFT JOIN Articles.ArticleTopic TA ON CA.id = TA.article_id " \
+            f"WHERE TA.article_id IS NULL AND (TA.model != %s OR TA.model IS NULL) AND " \
+            f"CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_FIT_RANGE_DAY} DAY)"
     results = []
 
+    with closing(bqapi.Connection(client=client)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(query, (model,))
+            for r in cursor.fetchall():
+                results.append(list(r))
+    return pd.DataFrame(results,
+                        columns=["id", "title", "body", "published"])
+
+
+def get_fitting_articles(client):
+    query = "SELECT id, title, body, published " \
+            "FROM Articles.CleanedArticles AS CA WHERE CA.published >= " \
+            f"TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_FIT_RANGE_DAY} DAY)"
+    results = []
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
             cursor.execute(query)
             for r in cursor.fetchall():
                 results.append(list(r))
-    return pd.DataFrame(results,
-                        columns=["id", "title", "body", "published"])
+        return pd.DataFrame(results,
+                            columns=["id", "title", "body", "published"])
 
 
 def identify_topics(df: pd.DataFrame):
@@ -82,26 +103,120 @@ def summarize_topics(df: pd.DataFrame, jobs=7):
     return topic_sum
 
 
-def write_topics(topic_df: pd.DataFrame, sum_df, project):
-    upd_stmt = """UPDATE Articles.CleanedArticles SET topic = %s, topic_prob = %s WHERE id = %s"""
-    ins_stmt = """INSERT INTO Articles.TopicSummary VALUES(%s, %s)"""
-    client = bq.Client(project=project)
+def upload_topic(model: BERTopic):
+    path_name = str(uuid.uuid4())
+    model.save(path="./temp_model", serialization="safetensors", save_embedding_model=False, save_ctfidf=True)
+    shutil.make_archive(path_name, "zip", "./temp_model")
+    upload_blob(config.TOPIC_BUCKET, path_name + ".zip", destination_blob_name=path_name + ".zip", generation=None)
+    shutil.rmtree("./temp_model")
+    os.remove(path_name + ".zip")
+    return f"gs://{config.TOPIC_BUCKET}/{path_name}.zip"
 
+
+def write_topics(client: bq.Client, model, sum_df):
+    path = upload_topic(model)
+    model_stmt = """INSERT INTO Articles.TopicModel 
+    SELECT CASE WHEN MAX(id) IS NULL THEN 0 ELSE MAX(id) + 1 END, CURRENT_TIMESTAMP(), ?, False 
+    FROM Articles.TopicModel;"""
+    ins_stmt = """INSERT INTO Articles.TopicSummary SELECT ?, MAX(id), ? FROM Articles.TopicModel"""
+    id_stmt = """SELECT MAX(id) FROM Articles.TopicModel"""
+    client = bq.Client(project=client.project)
+
+    with BigquerySession(client) as session:
+        session.begin_transaction()
+        job = client.query(model_stmt, bq.QueryJobConfig(
+            create_session=False,
+            query_parameters=[
+                bq.ScalarQueryParameter(None, "STRING", path)
+            ],
+            connection_properties=[
+                bq.query.ConnectionProperty(
+                    key="session_id", value=session.session_id
+                )
+            ],
+        ), location=session.location)
+        job.result()
+        for _, row in sum_df.iterrows():
+            job = client.query(ins_stmt, bq.QueryJobConfig(
+                create_session=False,
+                query_parameters=[
+                    bq.ScalarQueryParameter(None, "INTEGER", row["topic"]),
+                    bq.ScalarQueryParameter(None, "STRING", row["summary"])
+                ],
+                connection_properties=[
+                    bq.query.ConnectionProperty(
+                        key="session_id", value=session.session_id
+                    )
+                ],
+            ), location=session.location)
+            job.result()
+        session.commit()
+
+
+def load_topic_model(client):
+    query = "SELECT id, fit_date, path FROM Articles.TopicModel AS TM " \
+            f"WHERE TM.fit_date >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_TTL_DAY} DAY) ORDER BY fit_date DESC LIMIT 1"
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
-            cursor.executemany(upd_stmt,
-                               [(row["topic"], row["topic_prob"], row["id"]) for _, row in topic_df.iterrows()])
-            cursor.executemany(ins_stmt, [(row["topic"], row["summary"]) for _, row in sum_df.iterrows()])
-        connection.commit()
-    return True
+            cursor.execute(query)
+            result = cursor.fetchone()
+            if result is None:
+                raise FileNotFoundError("Model Unavailable")
+
+    path = result[2]
+    id = result[0]
+    download_blob(path, "./temp_topic.zip")
+    shutil.unpack_archive("./temp_topic.zip", "./temp_topic")
+    model = BERTopic.load("./temp_topic", embedding_model=SentenceTransformer(config.TOPIC_EMBEDDING))
+    shutil.rmtree('./temp_topic')
+    os.remove("./temp_topic.zip")
+    return id, model
+
+
+def get_topic_model(client):
+    try:
+        return load_topic_model(client)
+    except FileNotFoundError:
+        articles = get_fitting_articles(client)
+        articles, model = identify_topics(articles)
+        sum_df = summarize_topics(articles)
+        write_topics(client, model, sum_df)
+        return load_topic_model(client)
+
+
+def batch_insert_topic(project, batch):
+    query = """INSERT INTO Articles.ArticleTopic VALUES(%s, %s, %s, %s)"""
+    with closing(bq.Client(project=project)) as client:
+        with closing(bqapi.Connection(client=client)) as connection:
+            with closing(connection.cursor()) as cursor:
+                cursor.executemany(query, batch)
+            connection.commit()
+
+
+def categorize_articles(client):
+    id, model = get_topic_model(client)
+    articles = get_topicless_articles(client, id)
+    if articles.shape[0] == 0:
+        return
+    topics, prob = model.transform(articles.body)
+    articles["topic"] = topics
+    articles["topic_prob"] = prob
+    return id, articles
+
+
+def write_article_topics(articles, model_id, batch_size=100, jobs=8):
+    params = [(row["id"], model_id, row["topic"], row["topic_prob"]) for _, row in articles.iterrows()]
+    batches = []
+    for i in range(0, len(params), batch_size):
+        batches.append(params[i:i + batch_size])
+    parallel = Parallel(n_jobs=jobs, return_as="generator")
+    with tqdm(total=len(batches)) as progress:
+        for _ in parallel(delayed(batch_insert_topic)(client.project, b) for b in batches):
+            progress.update(1)
 
 
 if __name__ == "__main__":
-    client = bq.Client(project=config.GCP_PROJECT)
-    articles = get_topicless_articles(client)
-    articles, _ = identify_topics(articles)
-    sum_df = summarize_topics(articles)
-    write_topics(articles, sum_df, config.GCP_PROJECT)
-
-
-
+    with closing(bq.Client(project=config.GCP_PROJECT, credentials=None)) as client:
+        mid, articles = categorize_articles(client)
+        gc.collect()
+        write_article_topics(articles, mid)

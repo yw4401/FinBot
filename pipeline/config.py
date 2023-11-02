@@ -1,6 +1,7 @@
 GCP_PROJECT = "msca310019-capstone-f945"
 
 # Article Ingestion
+ARTICLE_INGEST_MAX_DAYS = 30 * 7
 ARTICLE_TARGET_BUCKET = "consolidated-articles"
 ARTICLE_CONVERT_META_BUCKET = "meta-info"
 ARTICLE_CONVERT_META_IDX = "scraper-markdown-index.json"
@@ -30,6 +31,9 @@ ARTICLE_COREF_TARGET_BUCKET = ARTICLE_CONVERT_SUBSAMPLE_TARGET
 ARTICLE_COREF_FILE_PATTERN = "corref-{year}-{month}.parquet"
 
 # Topic Extraction
+TOPIC_BUCKET = "topic-models-null"
+TOPIC_TTL_DAY = 7
+TOPIC_FIT_RANGE_DAY = ARTICLE_INGEST_MAX_DAYS
 TOPIC_EMBEDDING = "all-MiniLM-L6-v2"
 TOPIC_UMAP_NEIGHBORS = 15
 TOPIC_UMAP_COMPONENTS = 5
@@ -61,8 +65,8 @@ NER_SPACY_MOD = "en_core_web_md"
 
 # Chroma Articles
 ARTICLE_SPLITTER_TOKENIZER = "google/flan-t5-xxl"
-ARTICLE_SPLITTER_CHUNK_SIZE = 256
-ARTICLE_SPLITTER_CHUNK_OVERLAP = 0
+ARTICLE_SPLITTER_CHUNK_SIZE = 512
+ARTICLE_SPLITTER_CHUNK_OVERLAP = 64
 ARTICLE_FAISS_TEMP_DIRECTORY = "./article_db"
 ARTICLE_FAISS_EMBEDDING = "shilongdai/finember"
 ARTICLE_DB_COLLECTION = "articles"
@@ -74,6 +78,7 @@ ARTICLE_FAISS_PROCESSES = None
 
 # Chroma Topics
 TOPIC_FAISS_EMBEDDING = ARTICLE_FAISS_EMBEDDING
+TOPIC_EMBED_TOP_THRESHOLD = 0.8
 TOPIC_FAISS_TARGET = "scraped-news-article-data-null"
 TOPIC_FAISS_FILE = "topic-chroma-{year}-{month}.zip"
 TOPIC_FAISS_BATCH = 16
@@ -94,7 +99,8 @@ ES_TOPIC_MAPPING = {
         "metadata": {
             "properties": {
                 "topic": {"type": "integer", "index": True},
-                "created_at": {"type": "date", "index": True}
+                "model": {"type": "integer", "index": True},
+                "recency": {"type": "date", "index": True}
             }
         }
     }
@@ -116,6 +122,7 @@ ES_ARTICLES_MAPPING = {
             "properties": {
                 "entities": {"type": "text", "index": True},
                 "topic": {"type": "integer", "index": True},
+                "model": {"type": "integer", "index": True},
                 "published_at": {"type": "date", "index": True},
             }
         }

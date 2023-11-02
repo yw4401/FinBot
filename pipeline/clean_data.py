@@ -17,7 +17,8 @@ from tqdm import tqdm
 def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
             "FROM Articles.ScrapedArticles AS SA LEFT JOIN Articles.CleanedArticles CA ON SA.id = CA.id " \
-            "WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY) AND CA.id IS NULL"
+            f"WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.ARTICLE_INGEST_MAX_DAYS} DAY)" \
+            f" AND CA.id IS NULL"
     results = []
 
     with closing(bqapi.Connection(client=client)) as connection:
