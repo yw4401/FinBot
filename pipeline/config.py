@@ -207,7 +207,7 @@ SUMMARY_FILTER_SYSTEM = "You are a helpful AI assistant that will determine whet
                         "retail investor interested in different financial assets. Then, you will determine if the " \
                         "summary talks about the movement of share prices, index, or information that can easily " \
                         "be extracted from a stock screener. For each determination, " \
-                        "first give the reasoning, then given the judgement. You should format your response according " \
+                        "first give the concise reasoning, then given the judgement. You should format your response according " \
                         "to the following examples:\nUser:\n" \
                         "* Stock rallies today morning as Microsoft beats earning from last quarter\n" \
                         "* New CEO Sneed joined Microsoft from Google\n" \

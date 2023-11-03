@@ -12,6 +12,7 @@ from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate
 from langchain.schema import HumanMessage, AIMessage
+from openai.error import RateLimitError
 from pydantic import BaseModel, Field
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -97,8 +98,9 @@ def filter_summary_complete(summary, llm):
         while True:
             try:
                 return combined(summary)
-            except (ResourceExhausted, InternalServerError):
-                time.sleep(1)
+            except Exception as e:
+                print(e)
+                time.sleep(30)
     except (ValueError, InvalidArgument):
         return {"output": FilteredOutput()}
 
@@ -111,8 +113,9 @@ def augment_summary_complete(text, plan_llm):
         while True:
             try:
                 return combined(text)
-            except (ResourceExhausted, InternalServerError):
-                time.sleep(1)
+            except Exception as e:
+                print(e)
+                time.sleep(30)
     except (ValueError, InvalidArgument):
         return {"output": AugmentedOutput()}
 
@@ -124,8 +127,9 @@ def rewrite_summary_time(title, text, date, llm):
         while True:
             try:
                 return rewriter({"ipt_text": text, "title": title, "date": date_str})
-            except (ResourceExhausted, InternalServerError):
-                time.sleep(1)
+            except Exception as e:
+                print(e)
+                time.sleep(30)
     except (ValueError, InvalidArgument):
         return {"text": "FAILED"}
 
@@ -136,20 +140,21 @@ def summary_summary_headline(text, llm):
         while True:
             try:
                 return rewriter({"summary": text})
-            except (ResourceExhausted, InternalServerError):
-                time.sleep(1)
+            except Exception as e:
+                print(e)
+                time.sleep(30)
     except (ValueError, InvalidArgument):
         return {"text": "FAILED"}
 
 
 def filter_summary(df, jobs=5):
-    plan_llm = ChatVertexAI(temperature=config.SUMMARY_AUG_TEMPERATURE,
-                            model_name=config.SUMMARY_AUG_MODEL,
-                            project=config.GCP_PROJECT,
-                            max_output_tokens=1024)
+    with open(config.OPENAI_KEY_PATH) as fp:
+        key = fp.read().strip()
+
+    plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key, temperature=0, max_tokens=1024)
     relevant = []
     stat = []
-    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator", backend="threading")
+    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator")
     with tqdm(total=df.shape[0]) as progress_bar:
         for i, augmentation in enumerate(
                 parallel(joblib.delayed(filter_summary_complete)(i, plan_llm) for i in df.summary.tolist())):
@@ -176,7 +181,7 @@ def rewrite_summary(df, jobs=5):
     #                         max_output_tokens=1024)
     errors = []
     summaries = []
-    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator", backend="threading")
+    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator")
     with tqdm(total=df.shape[0]) as progress_bar:
         for i, augmentation in enumerate(
                 parallel(joblib.delayed(rewrite_summary_time)(row["title"], row["summary"],
@@ -198,13 +203,13 @@ def rewrite_summary(df, jobs=5):
 
 
 def headline_summary(df, jobs=5):
-    plan_llm = ChatVertexAI(temperature=config.SUMMARY_AUG_TEMPERATURE,
-                            model_name=config.SUMMARY_AUG_MODEL,
-                            project=config.GCP_PROJECT,
-                            max_output_tokens=1024)
+    with open(config.OPENAI_KEY_PATH) as fp:
+        key = fp.read().strip()
+
+    plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key, temperature=0, max_tokens=1024)
     errors = []
     summaries = []
-    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator", backend="threading")
+    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator")
     with tqdm(total=df.shape[0]) as progress_bar:
         for i, augmentation in enumerate(
                 parallel(joblib.delayed(summary_summary_headline)(row["summary"], plan_llm) for _, row in
@@ -227,14 +232,14 @@ def headline_summary(df, jobs=5):
 
 
 def augment_summary(df, jobs=5):
-    plan_llm = ChatVertexAI(temperature=config.SUMMARY_AUG_TEMPERATURE,
-                            model_name=config.SUMMARY_AUG_MODEL,
-                            project=config.GCP_PROJECT,
-                            max_output_tokens=1024)
+    with open(config.OPENAI_KEY_PATH) as fp:
+        key = fp.read().strip()
+
+    plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key, temperature=0, max_tokens=1024)
     questions = []
     reverse_questions = []
     errors = []
-    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator", backend="threading")
+    parallel = joblib.Parallel(n_jobs=jobs, return_as="generator")
     with tqdm(total=df.shape[0]) as progress_bar:
         for i, augmentation in enumerate(
                 parallel(joblib.delayed(augment_summary_complete)(i, plan_llm) for i in df.summary.tolist())):
@@ -304,24 +309,3 @@ def inject_noise(df, splitter, target_chunks=8):
     df = df.copy()
     df["body"] = new_bodies
     return df
-
-
-if __name__ == "__main__":
-    with bq.Client(project=config.GCP_PROJECT) as client:
-        df = get_full_data(client)
-        df = df.drop_duplicates(subset=["body"]).sample(10, random_state=93)
-        print(df.summary.tolist())
-        df = filter_summary(df)
-        print(df.summary.tolist())
-        df = rewrite_summary(df)
-        print(df.summary.tolist())
-        df = headline_summary(df)
-        print(df.summary.tolist())
-        df = augment_summary(df)
-        print(df.head())
-        df = inject_noise(df, create_splitter())
-        print(df.body.tolist()[0])
-    # print("Uploading article snapshots")
-    # train, test = get_data_sets_df(df)
-    # train.to_parquet(target_url.format(split="train"), index=False)
-    # test.to_parquet(target_url.format(split="test"), index=False)
