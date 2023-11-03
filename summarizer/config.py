@@ -42,6 +42,11 @@ TOPIC_K = 3
 
 # Article QA Response
 ARTICLE_K = 2
+QA_RESP_PROMPT = "You are an AI assistant that will answer the given question in a concise way from the given context. " \
+                 "You MUST only use the information given in the context, and not your prior knowledge. If you cannot " \
+                 'answer the question via the given context, respond with ' \
+                 '"Sorry, I cannot answer this question using the articles."\n\nBEGIN CONTEXT:\n{context}\n\n' \
+                 'BEGIN QUESTION:\n{question}'
 
 # Article Summary Response
 TOPIC_SUM_K = 5
@@ -57,4 +62,6 @@ BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n<|im_end|>
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
+QA_MODEL = "openai"
+SUM_MODEL = "openai"
 

@@ -1,4 +1,5 @@
 from finetuning import *
+from pipeline.build_vector_index import create_splitter
 
 if __name__ == "__main__":
     df = pd.read_parquet(f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_COREF}")

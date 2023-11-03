@@ -1,4 +1,4 @@
-def extract_company_ticker(text):
+def extract_company_ticker(query, response):
     return "MSFT"
 
 

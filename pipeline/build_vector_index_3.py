@@ -183,6 +183,7 @@ if __name__ == "__main__":
         es_key = fp.read().strip()
     with open(config.ES_CLOUD_ID_PATH, "r") as fp:
         es_id = fp.read().strip()
+    print(device)
     elastic_client = Elasticsearch(cloud_id=es_id, api_key=es_key)
     encoder = SentenceTransformer(model_name_or_path=config.TOPIC_FAISS_EMBEDDING, device=device)
 
