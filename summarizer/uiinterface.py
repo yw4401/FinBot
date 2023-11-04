@@ -21,6 +21,10 @@ with open(config.ES_CLOUD_ID_PATH, "r") as fp:
 
 
 class YFinance:
+    """
+    A temporary fix for Yahoo's main API being down.
+    """
+
     user_agent_key = "User-Agent"
     user_agent_value = ("Mozilla/5.0 (Windows NT 6.1; Win64; x64) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -143,6 +147,12 @@ def get_article_store():
 
 @st.cache_data(ttl="7d")
 def get_model_num():
+    """
+    Gets the latest servable topic model
+
+    :returns: the latest servable model number
+    """
+
     query = "SELECT id FROM Articles.TopicModel WHERE servable ORDER BY fit_date DESC LIMIT 1"
     with bq.Client(project=config.GCP_PROJECT) as client:
         with closing(bqapi.Connection(client=client)) as connection:
@@ -152,6 +162,13 @@ def get_model_num():
 
 
 def get_qa_llm(kind=config.QA_MODEL, max_token=256):
+    """
+    Gets a langchain LLM for QA.
+
+    :param kind: the type of model. Currently it supports PaLM2 ("vertexai"), GPT-3.5 ("openai").
+    :param max_token: the maximum number of tokens that can be emitted.
+    """
+
     if kind == "vertexai":
         plan_llm = ChatVertexAI(
             project=config.GCP_PROJECT,
@@ -172,6 +189,14 @@ def get_qa_llm(kind=config.QA_MODEL, max_token=256):
 
 
 def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
+    """
+    Gets a langchain LLM for key-point summarization.
+
+    :param kind: the type of model. Currently it supports PaLM2 ("vertexai"), GPT-3.5 ("openai"),
+    and Mistral-7B ("custom")
+    :param max_token: the maximum number of tokens that can be emitted.
+    """
+
     if kind == "vertexai":
         plan_llm = ChatVertexAI(
             project=config.GCP_PROJECT,
@@ -196,6 +221,16 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
 
 
 def answer_question(query, now, delta, model, topics):
+    """
+    Creates an async task to answer the user's query for a set of topics
+
+    :param query: the user query
+    :param now: the current time
+    :param delta: the timedelta for how far back to go
+    :param model: the topic model number
+    :param topics: the relevant topics to use
+    """
+
     plan_llm = get_qa_llm()
     retriever = ElasticSearchTopicRetriever(topic_elasticstore=get_topic_store(),
                                             chunks_elasticstore=get_article_store(),
@@ -208,11 +243,32 @@ def answer_question(query, now, delta, model, topics):
 
 
 def find_summaries(query, topics, model, now, delta):
+    """
+    Creates an async corotine for generating the key point summaries.
+
+    :param query: the query string from the user
+    :param topics: the relevant topics
+    :param model: the topic model number
+    :param now: the current time
+    :param delta: the timedelta for how far back to go
+    """
+
     plan_llm = get_summary_llm()
     return aget_summaries(query, topics, now, delta, model, get_article_store(), plan_llm)
 
 
 async def get_qa_result(query, now, delta, model):
+    """
+    async function for concurrently generating the qa response, and also the key-point summaries
+
+    :param query: the user query string
+    :param now: the current time
+    :param delta: the timedelta for how far back to go
+    :param model: the topic model number
+    :returns: A dictionary in the form of
+    {"qa": qa answer, "summaries": [{"title": tagline, "keypoints": [keypoints 1, kp 2,...]}}, ...]
+    """
+
     topic_results = await afind_top_topics(get_topic_store(), query, now, delta, model, k=config.TOPIC_SUM_K)
     topic_nums = [topic.metadata["topic"] for topic in topic_results]
     qa_coro = asyncio.ensure_future(answer_question(query, now, delta, model, topic_nums[:config.TOPIC_K]))
@@ -236,6 +292,13 @@ period_map = {
 
 
 def finbot_response(text, period):
+    """
+    Gets the qa and summarization result given query and timeframe:
+
+    :param text: the user query
+    :param period: string representing how far back to go
+    """
+
     now = datetime.datetime(year=2023, month=10, day=31)
     delta = period_map[period]
     topic_model = get_model_num()
