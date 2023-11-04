@@ -12,7 +12,7 @@ def fetch_data_alt(ticker_symbol, query, response, period="1y"):
     if not market_cap:
         raise FileNotFoundError(ticker_symbol)
 
-    kpis = ner.extract_relevant_field(query, response, ticker)
+    kpis = ner.extract_relevant_field(query, summary, ticker)
     result = {}
     for g in kpis.groups:
         if g.group_title not in result:
@@ -126,8 +126,6 @@ def main():
     st.title("FinBot")
 
     user_text = st.text_input("Enter your question here:")
-
-    #   ticker_symbol = st.text_input("Enter the ticker symbol (e.g., MSFT):", "MSFT").upper()
     period = st.selectbox("Select the period:",
                           ["1d", "5d", "1mo", "3mo", "6mo"])
 

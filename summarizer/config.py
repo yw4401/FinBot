@@ -85,12 +85,13 @@ NER_RESPONSE_PROMPT = ("You are a helpful AI assistant that will provide the sto
                        "\n{format_instructions}\n\n"
                        "Text:\n{text}\n\nQuery:{query}")
 KPI_PROMPT = ("You are a helpful AI assistant that will identify the relevant KPI/metrics for a given stock. "
-              "The relevance of a KPI depends on whether the user would be interested in knowing it after reading "
-              "considering the response and the query. "
-              "You should try to be as concise as possible in selecting the KPI. Each selected KPI must be extremely relevant. "
+              "The relevance of a KPI depends on whether the user would be interested in knowing it given the query "
+              "and the description of the company. "
+              "You should try to be as concise as possible in selecting the KPI. "
+              "Each selected KPI must be extremely relevant. "
               "You should group the relevant KPIs into logical sections with an "
               "appropriate title with appropriate capitalization.\n{format_instructions}\n\n"
-              "Query: {query}\n\nResponse: {response}\n\nKPIs: {kpi}")
+              "Query: {query}\n\nCompany: {response}\n\nKPIs: {kpi}")
 
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"

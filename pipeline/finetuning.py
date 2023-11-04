@@ -316,3 +316,20 @@ def inject_noise(df, splitter, target_chunks=7):
     df = df.copy()
     df["body"] = new_bodies
     return df
+
+
+def fix_summary_tagline(df):
+    break_regex = re.compile(r"\n\*")
+    sums = df.summary.apply(break_regex.split)
+    fixed_sum = []
+    for s in sums:
+        taglines = s[0].split("\n")
+        if len(taglines) > 1:
+            tagline = taglines[-1]
+        else:
+            tagline = taglines[0]
+        key_points = [tagline] + [f"* {p}" for p in s[1:]]
+        fixed_sum.append("\n".join(key_points))
+    df = df.copy()
+    df["summary"] = fixed_sum
+    return df

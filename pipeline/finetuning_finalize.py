@@ -5,6 +5,7 @@ if __name__ == "__main__":
     df = pd.read_parquet(f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_COREF}")
     print(df.columns)
     df = inject_noise(df, create_splitter())
+    df = fix_summary_tagline(df)
     print("Uploading article snapshots")
     train, test = get_data_sets_df(df)
     target_url = f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_FILE_PATTERN}"
