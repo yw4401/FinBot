@@ -103,6 +103,8 @@ ES_ARTICLES_MAPPING = {
         },
         "metadata": {
             "properties": {
+                "title": {"type": "text", "index": True},
+                "url": {"type": "text", "index": False},
                 "entities": {"type": "text", "index": True},
                 "topic": {"type": "integer", "index": True},
                 "model": {"type": "integer", "index": True},
