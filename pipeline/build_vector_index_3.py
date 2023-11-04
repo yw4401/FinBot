@@ -177,6 +177,8 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
             "chunk_text": chunk,
             "chunk_text_embedding": embeddings[i].tolist(),
             "metadata": {
+                "title": row["title"].strip(),
+                "url": row["url"].strip(),
                 "entities": " ".join(row["entities"][i]),
                 "published_at": published,
                 "topic": int(row["topic"]),
@@ -214,15 +216,15 @@ def get_unindexed_topics(client: bq.Client):
     Gets the articles that have been pre-processed, but not been run through the topic model yet.
     """
 
-    query = "SELECT TS.model, TS.topic, TDT.recency, TS.summary FROM "\
-                f"(SELECT TAT.model as model, TAT.topic as topic, " \
-                f"timestamp_seconds(cast(avg(unix_seconds(CA.published)) as int64)) AS recency " \
-                f"FROM Articles.ArticleTopic AS TAT, Articles.CleanedArticles AS CA " \
-                f"WHERE TAT.article_id = CA.id AND TAT.topic_prob >= {config.TOPIC_EMBED_TOP_THRESHOLD} " \
-                f"GROUP BY TAT.model, TAT.topic) AS TDT, " \
+    query = "SELECT TS.model, TS.topic, TDT.recency, TS.summary FROM " \
+            f"(SELECT TAT.model as model, TAT.topic as topic, " \
+            f"timestamp_seconds(cast(avg(unix_seconds(CA.published)) as int64)) AS recency " \
+            f"FROM Articles.ArticleTopic AS TAT, Articles.CleanedArticles AS CA " \
+            f"WHERE TAT.article_id = CA.id AND TAT.topic_prob >= {config.TOPIC_EMBED_TOP_THRESHOLD} " \
+            f"GROUP BY TAT.model, TAT.topic) AS TDT, " \
             f"Articles.TopicSummary AS TS, " \
-                f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM " \
-                f"WHERE NOT TM.servable GROUP BY TM.id) AS NM " \
+            f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM " \
+            f"WHERE NOT TM.servable GROUP BY TM.id) AS NM " \
             f"WHERE NM.id = TDT.model AND TDT.model = TS.model AND TDT.topic = TS.topic ORDER BY TS.topic ASC"
     result = []
     with closing(bqapi.Connection(client=client)) as connection:
@@ -239,16 +241,17 @@ def get_articles_by_topics(client: bq.Client, model):
     Gets all articles used by a given revision of the topic model.
     """
 
-    query = "SELECT CA.id, CA.published, CA.source, CA.body, ACT.topic FROM Articles.CleanedArticles AS CA, " \
-            "Articles.ArticleTopic ACT " \
-            "WHERE CA.id = ACT.article_id AND ACT.model = %s"
+    query = ("SELECT CA.id, CA.url, CA.published, CA.source, CA.title, CA.body, ACT.topic "
+             "FROM Articles.CleanedArticles AS CA, "
+             "Articles.ArticleTopic ACT "
+             "WHERE CA.id = ACT.article_id AND ACT.model = %s")
     result = []
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
-            cursor.execute(query, (int(model), ))
+            cursor.execute(query, (int(model),))
             for r in cursor.fetchall():
                 result.append(list(r))
-    result_df = pd.DataFrame(result, columns=["id", "published", "source", "body", "topic"])
+    result_df = pd.DataFrame(result, columns=["id", "url", "published", "source", "title", "body", "topic"])
     result_df["model"] = model
     return result_df
 
