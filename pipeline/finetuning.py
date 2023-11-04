@@ -262,7 +262,6 @@ def get_data_sets_df(sample_df, test_instances=1000):
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
     sample_df["summary"] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
-    sample_df["summary"] = sample_df.title.str.strip() + "\n" + sample_df.summary
     sample_df["summary"] = sample_df.summary.str.strip()
 
     body = []

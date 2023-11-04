@@ -19,6 +19,17 @@ except ModuleNotFoundError:
 
 
 async def afind_top_topics(vector_db, query, now, delta, model, k=5):
+    """
+    async function that identifies the topics relevant to the query in a given time frame
+
+    :param vector_db: the ElasticsearchStore that allows querying over the topics
+    :param query: the query string
+    :param now: the current time
+    :param delta: datetime.timedelta determining how far back to go
+    :param model: the topic model id identifying the model that generated the topics
+    :param k: the number of topics to find. defaults to 5.
+    :returns: list of Langchain Documents containing the top topics
+    """
     start_date = now - delta
     search_args = [{"term": {"metadata.model": model}},
                    {"range": {"metadata.recency": {"gte": start_date.strftime("%Y-%m-%d")}}}]
@@ -27,6 +38,18 @@ async def afind_top_topics(vector_db, query, now, delta, model, k=5):
 
 
 def find_top_topics(vector_db, query, now, delta, model, k=5):
+    """
+    function that identifies the topics relevant to the query in a given time frame
+
+    :param vector_db: the ElasticsearchStore that allows querying over the topics
+    :param query: the query string
+    :param now: the current time
+    :param delta: datetime.timedelta determining how far back to go
+    :param model: the topic model id identifying the model that generated the topics
+    :param k: the number of topics to find. defaults to 5.
+    :returns: list of Langchain Documents containing the top topics.
+    """
+
     start_date = now - delta
     search_args = [{"term": {"metadata.model": model}},
                    {"range": {"metadata.recency": {"gte": start_date.strftime("%Y-%m-%d")}}}]
@@ -34,11 +57,22 @@ def find_top_topics(vector_db, query, now, delta, model, k=5):
 
 
 class ElasticSearchTopicRetriever(BaseRetriever):
+    """
+    A LangChain retriever that implements the topic retrieval logic. That is, given a list of relevant topics,
+    it will find the top article chunks in each topic and combine the results.
+    """
+
+    #: the ElasticsearchStore for the article chunks
     chunks_elasticstore: ElasticsearchStore
+    #: the number of article chunks to retrieve from each topic
     chunk_k: int = config.ARTICLE_K
+    #: the relevant topics
     topics: List[int]
+    #: a datetime.timedelta representing how far back to go
     time_delta: datetime.timedelta
+    #: the current time
     now: datetime.datetime
+    #: the topic model id
     model: int
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
@@ -67,6 +101,9 @@ class ElasticSearchTopicRetriever(BaseRetriever):
         return result
 
     def _get_relevant_chunks(self, topic_num, query):
+        """
+        Helper method for getting the chunks for the synchronize _get_relevant_documents.
+        """
         start_date = self.now - self.time_delta
         search_args = [{"term": {"metadata.topic": topic_num}}, {"term": {"metadata.model": self.model}},
                        {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
@@ -76,6 +113,13 @@ class ElasticSearchTopicRetriever(BaseRetriever):
 
 
 class ChainRetriever(BaseRetriever):
+    """
+    An adaptor that converts BaseRetrievalQA chains into retriever for other chains. It will call each
+    given chain with the query, and then return the results from the chains as the retrieved documents. The
+    metadata from the chains are preserved.
+    """
+
+    #: list of BaseRetrievalQA chains to adapt
     chains: List[BaseRetrievalQA]
 
     def _get_relevant_documents(
@@ -93,6 +137,14 @@ class ChainRetriever(BaseRetriever):
 
 
 def topic_aggregate_chain(model, retriever, **kwargs):
+    """
+    Creates a langchain that can be used to do QA.
+
+    :param model: the langchain LLM to use
+    :param retriever: the retriever to use
+    :param kwargs: keyword arguments for from_chain_type for RetrievalQA
+    """
+
     chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.QA_RESP_PROMPT)}
     final_chain = RetrievalQA.from_chain_type(llm=model, chain_type="stuff",
                                               retriever=retriever, chain_type_kwargs=chain_type_kwargs, **kwargs)
@@ -100,7 +152,18 @@ def topic_aggregate_chain(model, retriever, **kwargs):
 
 
 def create_keypoints_chain(chunk_db, topic, topic_model, model,
-                           now: datetime.datetime, delta: datetime.timedelta, k=15):
+                           now: datetime.datetime, delta: datetime.timedelta, k=7):
+    """
+    Creates a langchain that can be used to do keypoint summaries by topic
+
+    :param chunk_db: ElasticsearchStore that points to the article chunks
+    :param topic: the topic number that the chain is responsible for
+    :param topic_model: the topic model id number for the topic
+    :param model: the langchain LLM to use
+    :param now: the current time
+    :param delta: how far to go back
+    :param k: the number of article chunks to retrieve for summarization
+    """
     if config.SUM_MODEL == "custom":
         chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.TOPIC_SUM_MISTRAL_PROMPT)}
     else:
@@ -119,6 +182,20 @@ def create_keypoints_chain(chunk_db, topic, topic_model, model,
 
 async def aget_summaries(query, topics, now, delta, topic_model, chunk_db, model, top_k=config.TOPIC_SUM_TOP_K,
                          chunk_k=config.TOPIC_SUM_CHUNKS):
+    """
+    async method for computing the key points on a topic by topic basis.
+
+    :param query: the user query
+    :param topics: a list of topics to compute summaries for
+    :param now: the current time
+    :param delta: how far back to go
+    :param topic_model: the topic model number
+    :param chunk_db: the ElasticsearchStore for the article chunks
+    :param model: the langchain LLM to use
+    :param top_k: the number of topic summaries to return
+    :param chunk_k: the number of chunks per topic to use for summarization.
+    """
+
     key_chains = [create_keypoints_chain(chunk_db, t, topic_model, model, now, delta, k=chunk_k) for t in topics]
     tasks = [c.acall(query) for c in key_chains]
     inter_results = await asyncio.gather(*tasks)
