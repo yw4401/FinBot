@@ -135,7 +135,7 @@ SUMMARY_AUG_USER = "{input_text}"
 SUMMARY_AUG_EXAMPLES = [
     {
         "user": "Anthropic’s AI chatbot Claude is posting lyrics to popular songs, lawsuit claims\n"
-                "* Universal Music has sued Anthropic, the AI startup, over “systematic and widespread infringement of their copyrighted song lyrics,” per a filing Wednesday in a Tennessee federal court."
+                "* Universal Music has sued Anthropic, the AI startup, over “systematic and widespread infringement of their copyrighted song lyrics,” per a filing Wednesday in a Tennessee federal court.\n"
                 "* Anthropic, the $4.1 billion startup behind Claude the chatbot, was founded in 2021 by former OpenAI research executives.\n"
                 "* Other music publishers, such as Concord and ABKCO, were also named as plaintiffs",
         "assistant": "REASON (Unanswerable): Retail investors would want to estimate the potential financial repercussions of the lawsuit on Anthropic in order to assess the company's financial stability and investment prospects.\n"

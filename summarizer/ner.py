@@ -1,32 +1,33 @@
 import asyncio
+from typing import List
 
 from langchain.chains import LLMChain
-from langchain.chat_models import ChatVertexAI
-from langchain.llms.openai import OpenAI
-from langchain.output_parsers import CommaSeparatedListOutputParser
+from langchain.output_parsers import CommaSeparatedListOutputParser, PydanticOutputParser
 from langchain.prompts import PromptTemplate
+from pydantic import BaseModel, Field
 
 import summarizer.config as config
+from summarizer.uiinterface import get_qa_llm
+
+
+class KPIGroup(BaseModel):
+
+    group_title: str = Field(description="The title of the logical group of KPIs")
+    group_members: List[str] = Field(description="The list of KPIs belonging to this group")
+
+
+class RelevantKPI(BaseModel):
+
+    relevance: str = Field(description="Explanation of why the picked KPIs are relevant")
+    groups: List[KPIGroup] = Field(description="Logical groups of relevant KPIs")
 
 
 def get_ner_llm(kind=config.NER_MODEL, max_token=256):
-    if kind == "vertexai":
-        plan_llm = ChatVertexAI(
-            project=config.GCP_PROJECT,
-            temperature=0,
-            model_name="chat-bison",
-            max_output_tokens=max_token
-        )
-        return plan_llm
-    elif kind == "openai":
-        with open(config.OPENAI_API) as fp:
-            key = fp.read().strip()
+    return get_qa_llm(kind, max_token)
 
-        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
-                          temperature=0, max_tokens=max_token)
-        return plan_llm
-    else:
-        raise NotImplemented()
+
+def get_kpi_llm(kind=config.KPI_MODEL, max_token=1024):
+    return get_qa_llm(kind, max_token)
 
 
 def build_ticker_extraction_chain(llm):
@@ -46,12 +47,30 @@ def format_response_for_ner(response):
 def extract_company_ticker(query, response):
     llm = get_ner_llm()
     chain = build_ticker_extraction_chain(llm)
-    result = asyncio.run(chain.arun({"text": format_response_for_ner(response), "query": query}))
-    return result
+    result = asyncio.run(chain.arun({"text": response, "query": query}))
+    normed_result = []
+    for r in result:
+        if "." in r:
+            normed_result.append(r)
+            normed_result.append(r.split(".")[0].strip())
+        else:
+            normed_result.append(r)
+    return normed_result
 
 
-def extract_relevant_field(text):
-    return []
+def build_kpi_extraction_chain(llm):
+    prompt = PromptTemplate.from_template(config.KPI_PROMPT)
+    output_parser = PydanticOutputParser(pydantic_object=RelevantKPI)
+    prompt = prompt.partial(format_instructions=output_parser.get_format_instructions())
+    llm_chain = LLMChain(llm=llm, prompt=prompt, output_parser=output_parser)
+    return llm_chain
+
+
+def extract_relevant_field(query, response, ticker):
+    llm = get_kpi_llm()
+    chain = build_kpi_extraction_chain(llm)
+    kpi_list = ", ".join(ticker.info.keys())
+    return asyncio.run(chain.arun({"query": query, "response": response, "kpi": kpi_list}))
 
 
 def extract_industry(text):

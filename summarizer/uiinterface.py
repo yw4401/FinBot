@@ -221,7 +221,7 @@ async def get_qa_result(query, now, delta, model):
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)
 
     return {
-        "qa": qa_completed["result"].strip(),
+        "qa": qa_completed["result"].replace("\n\n", "\n").strip(),
         "summaries": summaries
     }
 

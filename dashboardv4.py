@@ -5,46 +5,23 @@ import summarizer.ner as ner
 import summarizer.uiinterface as ui
 
 
-def fetch_data_alt(ticker_symbol, period="1y"):
+def fetch_data_alt(ticker_symbol, query, response, period="1y"):
     ticker = ui.YFinance(ticker_symbol)
     summary = ticker.info.get('longBusinessSummary', 'No summary available.')
     market_cap = ticker.info.get("marketCap")
     if not market_cap:
         raise FileNotFoundError(ticker_symbol)
 
-    kpis = {
-        "Basic": {
-            "Market Cap($)": market_cap,
-            "Total Enterprise Value (TEV)($)": ticker.info.get("enterpriseValue"),
-            "Total Revenues($)": ticker.info.get("totalRevenue")
-        },
-        "Profitability": {
-            "Gross Profit Margin(%)": ticker.info.get("grossMargins"),
-            "EBITDA Margin(%)": ticker.info.get("ebitdaMargins"),
-            "Operating Margin(%)": ticker.info.get("operatingMargin"),
-            "Net Profit Margin(%)": ticker.info.get("netProfitMargin"),
-            "Pre-Tax Profit Margin(%)": ticker.info.get("profitMargins")
-        },
-        "Per Share": {
-            "Revenue per Share($)": ticker.info.get("revenuePerShare"),
-            "EPS Diluted($)": ticker.info.get("trailingEps")
-        },
-        "Employees": {
-            "Total Employees": ticker.info.get("fullTimeEmployees")
-        },
-        "Valuation": {
-            "EV/Sales": ticker.info.get("enterpriseToRevenue"),
-            "P/E": ticker.info.get("trailingPE"),
-            "EV/EBITDA": ticker.info.get("enterpriseToEbitda"),
-            "P/B": ticker.info.get("priceToBook"),
+    kpis = ner.extract_relevant_field(query, response, ticker)
+    result = {}
+    for g in kpis.groups:
+        if g.group_title not in result:
+            result[g.group_title] = {}
+        for m in g.group_members:
+            if m in ticker.info:
+                result[g.group_title][m] = ticker.info[m]
 
-        },
-        "Forward Valuation": {
-            "Forward P/E": ticker.info.get("forwardPE")
-        }
-    }
-
-    return None, summary, kpis
+    return None, summary, result
 
 
 def fetch_data(ticker_symbol, period="1y"):
@@ -93,12 +70,13 @@ def display_summary_response(text, period):
         response = ui.finbot_response(text, period)
 
     # Display the QA placeholder
+    st.write("### Response")
     st.write(response["qa"])
     st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
     for summary in response["summaries"]:
-        st.write(f"*{summary['title']}*")
+        st.write(f"###### {summary['title'].strip()}")
         # Create bullet points for each keypoint
         for keypoint in summary["keypoints"]:
             st.markdown(f"- {keypoint}")
@@ -155,13 +133,15 @@ def main():
 
     if st.button("Ask Finbot") and len(user_text.strip()) > 0:
         qa_resp = display_summary_response(user_text, period)
+        str_resp = ner.format_response_for_ner(qa_resp)
         with st.spinner("Extracting symbols"):
-            ticker_symbol = ner.extract_company_ticker(user_text, qa_resp)
+            ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
+            print(ticker_symbol)
         if len(ticker_symbol) != 0:
             for t in ticker_symbol:
                 try:
                     with st.spinner("Fetching KPIs"):
-                        data, summary, kpis = fetch_data_alt(t, period)
+                        data, summary, kpis = fetch_data_alt(t, user_text, str_resp, period)
                         plot_data(data, t, summary, kpis)
                         st.write(f"https://finance.yahoo.com/quote/{t}")
                     break

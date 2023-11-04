@@ -1,17 +1,16 @@
 import asyncio
 import datetime
 import re
+from typing import Any, List, Optional, Dict
+
 from joblib import Parallel, delayed
 from langchain.callbacks.base import Callbacks
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
-from langchain.chains import RetrievalQA, LLMChain, SimpleSequentialChain
+from langchain.chains import RetrievalQA
 from langchain.chains.retrieval_qa.base import BaseRetrievalQA
-from langchain.output_parsers import CommaSeparatedListOutputParser
-from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate, \
-    PromptTemplate
+from langchain.prompts import PromptTemplate
 from langchain.schema import Document, BaseRetriever
 from langchain.vectorstores import ElasticsearchStore
-from typing import Any, List, Optional, Dict
 
 try:
     import config
@@ -46,6 +45,7 @@ class ElasticSearchTopicRetriever(BaseRetriever):
         parallel = Parallel(n_jobs=len(self.topics), backend="threading", return_as="generator")
         result = []
         for chunk in parallel(delayed(self._get_relevant_chunks)(t, query) for t in self.topics):
+            chunk.page_content = chunk.page_content.strip()
             result.extend(chunk)
         return result
 
@@ -61,7 +61,9 @@ class ElasticSearchTopicRetriever(BaseRetriever):
             coros.append(coro)
         result = []
         for r in await asyncio.gather(*coros):
-            result.extend(r)
+            for c in r:
+                c.page_content = c.page_content.strip()
+                result.append(c)
         return result
 
     def _get_relevant_chunks(self, topic_num, query):
