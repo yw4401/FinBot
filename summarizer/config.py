@@ -38,10 +38,10 @@ TOPIC_FILTER_FORMAT_SYSTEM = "You are an AI assistant that will format given tex
                              "The formatted output should only contain the topic numbers as integers.\n" \
                              "{format_instructions}"
 TOPIC_FILTER_FORMAT_USER = "{result}"
-TOPIC_K = 3
+TOPIC_K = 2
 
 # Article QA Response
-ARTICLE_K = 2
+ARTICLE_K = 3
 QA_RESP_PROMPT = "You are an AI assistant that will answer the given question in a concise way from the given context. " \
                  "You MUST only use the information given in the context, and not your prior knowledge. If you cannot " \
                  'answer the question via the given context, respond with ' \
@@ -51,17 +51,33 @@ QA_RESP_PROMPT = "You are an AI assistant that will answer the given question in
 # Article Summary Response
 TOPIC_SUM_K = 5
 TOPIC_SUM_TOP_K = 2
-TOPIC_SUM_CHUNKS = 14
-TOPIC_SUM_PROMPT = """<|im_start|>system
+TOPIC_SUM_CHUNKS = 7
+TOPIC_SUM_MISTRAL_PROMPT = """<|im_start|>system
 Summarize the key-points from the given context. The information in the summary should include, but should not be limited to information that can help answer the given question. Be concise if possible. Respond with "IMPOSSIBLE" if the context does not contain information that can answer the given question.
 <|im_end|>
 <|im_start|>user
 BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n<|im_end|>
 <|im_start|>assistant: """
+TOPIC_SUM_GENERIC_PROMPT = ('Summarize the key-points from the given context. '
+                            'The information in the summary should include, '
+                            'but should not be limited to information that can help answer the given question. '
+                            'Be concise if possible. '
+                            'Respond with "IMPOSSIBLE" if the context does not contain information that can '
+                            'answer the given question. The format of the response should be:\n'
+                            'one line summary of the keypoints\n* keypoints 1\n* keypoints 2\n...\n\n'
+                            'Text: {context}\n\nQuery: {question}\n')
+
+NER_RESPONSE_PROMPT = ("You are an AI assistant that will provide the stock tickers associated with companies "
+                       "mentioned in the given text. Then, you will order the identified ticker symbols from the "
+                       "most relevant to the least relevant with respect to the given query. The ticker symbol should "
+                       "be the ones that can be used to look up stock prices. Thus, if the text mentions Microsoft, "
+                       "you should provide MSFT as one of the symbols."
+                       "\n{format_instructions}\n\n"
+                       "Text:\n{text}\n\nQuery:{query}")
 
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
-QA_MODEL = "openai"
-SUM_MODEL = "openai"
-
+QA_MODEL = "vertexai"
+SUM_MODEL = "vertexai"
+NER_MODEL = "vertexai"

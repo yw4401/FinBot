@@ -18,7 +18,7 @@ from langchain.chat_models import ChatOpenAI, ChatVertexAI
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, ChatPromptTemplate
 from langchain.schema import HumanMessage, AIMessage
-from openai.error import RateLimitError, Timeout, APIConnectionError
+from openai.error import RateLimitError, Timeout, APIConnectionError, APIError
 from pydantic import BaseModel, Field
 from sklearn.model_selection import train_test_split
 
@@ -119,8 +119,7 @@ def get_llm(kind="openai"):
 
 
 async def async_retry_with_backoff(func, *params, limiter=None, start=1, factor=2, max_retry=6,
-                                   exceptions=(ResourceExhausted, InternalServerError,
-                                               Timeout, RateLimitError, APIConnectionError)):
+                                   exceptions=(Timeout, RateLimitError, APIConnectionError, APIError)):
     retry_time = 0
     while True:
         if retry_time > max_retry:

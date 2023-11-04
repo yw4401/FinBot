@@ -66,6 +66,7 @@ class YFinance:
         return crumb
 
     @property
+    @st.cache_data(hash_funcs={"summarizer.uiinterface.YFinance": hash}, ttl="1d")
     def info(self):
         # Yahoo modules doc informations :
         # https://cryptocointracker.com/yahoo-finance/yahoo-finance-api
@@ -93,6 +94,8 @@ class YFinance:
                                      allow_redirects=True)
 
         info = info_response.json()
+        if not info["quoteSummary"] or not info["quoteSummary"]["result"]:
+            raise FileNotFoundError(self.yahoo_ticker)
         info = info['quoteSummary']['result'][0]
 
         for mainKeys in info.keys():
@@ -106,6 +109,9 @@ class YFinance:
                     ret[key] = info[mainKeys][key]
 
         return ret
+
+    def __hash__(self):
+        return hash(self.yahoo_ticker)
 
 
 @st.cache_resource
@@ -145,45 +151,45 @@ def get_model_num():
                 return cursor.fetchone()[0]
 
 
-def get_qa_llm(kind=config.QA_MODEL):
+def get_qa_llm(kind=config.QA_MODEL, max_token=256):
     if kind == "vertexai":
         plan_llm = ChatVertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
             model_name="chat-bison",
-            max_output_tokens=512
+            max_output_tokens=max_token
         )
         return plan_llm
     elif kind == "openai":
         with open(config.OPENAI_API) as fp:
             key = fp.read().strip()
 
-        plan_llm = ChatOpenAI(model_name="gpt-4", openai_api_key=key,
-                              temperature=0, max_tokens=512)
+        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
+                          temperature=0, max_tokens=max_token)
         return plan_llm
     else:
         raise NotImplemented()
 
 
-def get_summary_llm(kind=config.SUM_MODEL):
+def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
     if kind == "vertexai":
         plan_llm = ChatVertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
             model_name="chat-bison",
-            max_output_tokens=512
+            max_output_tokens=max_token
         )
         return plan_llm
     elif kind == "custom":
         plan_llm = OpenAI(openai_api_base=config.SUM_API_SERVER, model_name=config.SUM_API_MODEL,
-                          max_tokens=512, temperature=0, openai_api_key="EMPTY", verbose=True)
+                          max_tokens=max_token, temperature=0, openai_api_key="EMPTY", verbose=True)
         return plan_llm
     elif kind == "openai":
         with open(config.OPENAI_API) as fp:
             key = fp.read().strip()
 
-        plan_llm = ChatOpenAI(model_name="gpt-4", openai_api_key=key,
-                              temperature=0, max_tokens=512)
+        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
+                          temperature=0, max_tokens=max_token)
         return plan_llm
     else:
         raise NotImplemented()
@@ -209,7 +215,7 @@ def find_summaries(query, topics, model, now, delta):
 async def get_qa_result(query, now, delta, model):
     topic_results = await afind_top_topics(get_topic_store(), query, now, delta, model, k=config.TOPIC_SUM_K)
     topic_nums = [topic.metadata["topic"] for topic in topic_results]
-    qa_coro = asyncio.ensure_future(answer_question(query, now, delta, model, topic_nums))
+    qa_coro = asyncio.ensure_future(answer_question(query, now, delta, model, topic_nums[:config.TOPIC_K]))
     sum_coro = asyncio.ensure_future(find_summaries(query, topic_nums, model, now, delta))
 
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)

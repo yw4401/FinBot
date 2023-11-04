@@ -8,10 +8,13 @@ import summarizer.uiinterface as ui
 def fetch_data_alt(ticker_symbol, period="1y"):
     ticker = ui.YFinance(ticker_symbol)
     summary = ticker.info.get('longBusinessSummary', 'No summary available.')
+    market_cap = ticker.info.get("marketCap")
+    if not market_cap:
+        raise FileNotFoundError(ticker_symbol)
 
     kpis = {
         "Basic": {
-            "Market Cap($)": ticker.info.get("marketCap"),
+            "Market Cap($)": market_cap,
             "Total Enterprise Value (TEV)($)": ticker.info.get("enterpriseValue"),
             "Total Revenues($)": ticker.info.get("totalRevenue")
         },
@@ -86,15 +89,16 @@ def fetch_data(ticker_symbol, period="1y"):
 
 
 def display_summary_response(text, period):
-    response = ui.finbot_response(text, period)
+    with st.spinner("Thinking"):
+        response = ui.finbot_response(text, period)
 
     # Display the QA placeholder
     st.write(response["qa"])
     st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
-    st.write("### You may be interested in:")
     for summary in response["summaries"]:
+        st.write(f"*{summary['title']}*")
         # Create bullet points for each keypoint
         for keypoint in summary["keypoints"]:
             st.markdown(f"- {keypoint}")
@@ -116,7 +120,7 @@ def plot_data(data, ticker_symbol, summary, kpis):
 
         st.plotly_chart(fig)
 
-    st.markdown("### **Key KPIs:**")
+    st.markdown(f"### **Key KPIs: {ticker_symbol}**")
 
     for category, metrics in kpis.items():
 
@@ -130,7 +134,8 @@ def plot_data(data, ticker_symbol, summary, kpis):
                 table_md += f"| {key} | {value if value else 'N/A'} |\n"
 
             # Display the markdown table
-            st.markdown(table_md)
+            st.write(table_md)
+            st.write("\n")
 
     st.markdown("### **Company Summary:**")
     st.write(summary)
@@ -150,12 +155,18 @@ def main():
 
     if st.button("Ask Finbot") and len(user_text.strip()) > 0:
         qa_resp = display_summary_response(user_text, period)
-        ticker_symbol = ner.extract_company_ticker(user_text, qa_resp)
-        data, summary, kpis = fetch_data_alt(ticker_symbol, period)
-
-        plot_data(data, ticker_symbol, summary, kpis)
-
-        st.write(f"https://finance.yahoo.com/quote/{ticker_symbol}")
+        with st.spinner("Extracting symbols"):
+            ticker_symbol = ner.extract_company_ticker(user_text, qa_resp)
+        if len(ticker_symbol) != 0:
+            for t in ticker_symbol:
+                try:
+                    with st.spinner("Fetching KPIs"):
+                        data, summary, kpis = fetch_data_alt(t, period)
+                        plot_data(data, t, summary, kpis)
+                        st.write(f"https://finance.yahoo.com/quote/{t}")
+                    break
+                except FileNotFoundError:
+                    pass
 
 
 if __name__ == "__main__":

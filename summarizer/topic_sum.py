@@ -99,7 +99,10 @@ def topic_aggregate_chain(model, retriever, **kwargs):
 
 def create_keypoints_chain(chunk_db, topic, topic_model, model,
                            now: datetime.datetime, delta: datetime.timedelta, k=15):
-    chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.TOPIC_SUM_PROMPT)}
+    if config.SUM_MODEL == "custom":
+        chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.TOPIC_SUM_MISTRAL_PROMPT)}
+    else:
+        chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.TOPIC_SUM_GENERIC_PROMPT)}
     start_date = now - delta
     search_args = {'k': k, 'fetch_k': k * 3,
                    "filter":
