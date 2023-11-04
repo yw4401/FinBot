@@ -58,7 +58,8 @@ def get_doc_chroma_meta(row, chunk_idx):
 
 
 def create_splitter():
-    tokenizer = AutoTokenizer.from_pretrained(config.ARTICLE_SPLITTER_TOKENIZER)
+    tokenizer = AutoTokenizer.from_pretrained(config.ARTICLE_SPLITTER_TOKENIZER,
+                                              add_eos_token=False, add_bos_token=False)
 
     def _huggingface_tokenizer_length(text: str) -> int:
         return len(tokenizer.encode(text))

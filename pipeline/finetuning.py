@@ -1,6 +1,9 @@
+import datetime
 import time
 
 import asyncio
+from typing import List
+
 import config
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
@@ -292,17 +295,24 @@ def get_full_data(client: bq.Client):
     return pd.DataFrame(results, columns=["id", "published", "title", "body", "summary_type", "summary"])
 
 
-def inject_noise(df, splitter, target_chunks=8):
+def inject_noise(df, splitter, target_chunks=7):
+    df = df.reset_index(drop=True)
     chunks = df.body.progress_apply(splitter.split_text)
+    chunks: List[List[str]] = [[c.strip() for c in chunk] for chunk in chunks]
     new_bodies = []
     for i, row in df.iterrows():
-        body_chunks = chunks[i]
+        published_date: datetime.datetime = row["published"]
+        body_chunks = [f"Published: {published_date.strftime('%Y-%m-%d')}\n{c}" for c in chunks[i]]
         body_chunks = body_chunks[:min(target_chunks, len(body_chunks))]
-        for i in range(target_chunks - len(body_chunks)):
-            alternative_article = np.random.choice(chunks)
-            body_chunks.append(np.random.choice(alternative_article))
+        for _ in range(target_chunks - len(body_chunks)):
+            alt_idx = np.random.choice(df.index)
+            alternative_article = chunks[alt_idx]
+            alt_date = df["published"].loc[alt_idx].strftime('%Y-%m-%d')
+            alt_choice = np.random.choice(alternative_article)
+            alt_text = f"Published: {alt_date}\n{alt_choice}"
+            body_chunks.append(alt_text)
         np.random.shuffle(body_chunks)
-        new_bodies.append("".join(body_chunks))
+        new_bodies.append("\n\n".join(body_chunks))
     df = df.copy()
     df["body"] = new_bodies
     return df
