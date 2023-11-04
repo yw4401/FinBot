@@ -84,10 +84,10 @@ NER_RESPONSE_PROMPT = ("You are a helpful AI assistant that will provide the sto
                        "that can be used by Yahoo Finance."
                        "\n{format_instructions}\n\n"
                        "Text:\n{text}\n\nQuery:{query}")
-KPI_PROMPT = ("You are a helpful AI assistant that will identify the relevant KPI/metrics for a given stock. The "
-              "relevance of the KPIs depends on the given query as well as the response to the query. "
-              "A KPI is relevant if a retail investor would be interested in knowing the KPI after asking the query "
-              "and then reading the response. Do not identify too many KPIs, only the most relevant ones. "
+KPI_PROMPT = ("You are a helpful AI assistant that will identify the relevant KPI/metrics for a given stock. "
+              "The relevance of a KPI depends on whether the user would be interested in knowing it after reading "
+              "considering the response and the query. "
+              "You should try to be as concise as possible in selecting the KPI. Each selected KPI must be extremely relevant. "
               "You should group the relevant KPIs into logical sections with an "
               "appropriate title with appropriate capitalization.\n{format_instructions}\n\n"
               "Query: {query}\n\nResponse: {response}\n\nKPIs: {kpi}")

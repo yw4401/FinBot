@@ -26,7 +26,7 @@ def get_ner_llm(kind=config.NER_MODEL, max_token=256):
     return get_qa_llm(kind, max_token)
 
 
-def get_kpi_llm(kind=config.KPI_MODEL, max_token=1024):
+def get_kpi_llm(kind=config.KPI_MODEL, max_token=512):
     return get_qa_llm(kind, max_token)
 
 
