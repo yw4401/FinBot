@@ -39,9 +39,9 @@ if __name__ == "__main__":
         peft_model.load_state_dict(state_dict)
     else:
         peft_model = PeftModel.from_pretrained(model, script_args.lora_path)
-    peft_model = peft_model.to(dtype=torch.float16)
     print("Merging Model")
     merged_model = peft_model.merge_and_unload()
+    merged_model = merged_model.to(dtype=torch.float16)
     print("Saving Merged Model")
     merged_model.save_pretrained(script_args.model_out)
     print("Saving Tokenizer")
