@@ -1,18 +1,18 @@
-import requests
+import asyncio
+import datetime
 import urllib
 from contextlib import closing
 
-import asyncio
-import datetime
-from langchain.chat_models import ChatVertexAI, ChatOpenAI
-from langchain.llms import OpenAI
-from langchain.embeddings import SentenceTransformerEmbeddings
-from langchain.vectorstores.elasticsearch import ElasticsearchStore
-import summarizer.config as config
-from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics
-import streamlit as st
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
+import requests
+import streamlit as st
+from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.llms import OpenAI, VertexAI
+from langchain.vectorstores.elasticsearch import ElasticsearchStore
+
+import summarizer.config as config
+from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics
 
 with open(config.ES_KEY_PATH, "r") as fp:
     es_key = fp.read().strip()
@@ -170,10 +170,10 @@ def get_qa_llm(kind=config.QA_MODEL, max_token=256):
     """
 
     if kind == "vertexai":
-        plan_llm = ChatVertexAI(
+        plan_llm = VertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
-            model_name="chat-bison",
+            model_name="text-bison",
             max_output_tokens=max_token
         )
         return plan_llm
@@ -198,10 +198,10 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
     """
 
     if kind == "vertexai":
-        plan_llm = ChatVertexAI(
+        plan_llm = VertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
-            model_name="chat-bison",
+            model_name="text-bison",
             max_output_tokens=max_token
         )
         return plan_llm
