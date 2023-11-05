@@ -51,11 +51,15 @@ def format_llama_qa_resp(example):
     return config.LLAMA_AI_QA_TEMPLATE.format(response=example["response"])
 
 
+def get_batch_row(examples, i):
+    return {k: examples[k][i] for k in examples}
+
+
 def format_llama_example(example, system, user_func, resp_func, tokenizer, template=None):
     output_texts = []
     for i in range(len(example['body'])):
-        s = resp_func(example[i])
-        user = user_func(example[i])
+        s = resp_func(get_batch_row(example, i))
+        user = user_func(get_batch_row(example, i))
 
         text = tokenizer.apply_chat_template([
             {"role": "system", "content": system},
