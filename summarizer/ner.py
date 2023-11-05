@@ -117,8 +117,17 @@ def extract_relevant_field(query, response, ticker):
     """
     llm = get_kpi_llm()
     chain = build_kpi_extraction_chain(llm)
-    kpi_list = ", ".join(ticker.info.keys())
-    return asyncio.run(chain.arun({"query": query, "response": response, "kpi": kpi_list}))
+    kpi_str = ""
+    for k, v in ticker.info.items():
+        try:
+            kpi_str = f"{kpi_str}\n{k}: {float(v)}"
+        except (ValueError, TypeError):
+            pass
+
+    try:
+        return asyncio.run(chain.arun({"query": query, "response": response, "kpi": kpi_str.strip()}))
+    except Exception:
+        return RelevantKPI(relevance="None", groups=[])
 
 
 def extract_industry(text):

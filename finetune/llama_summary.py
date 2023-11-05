@@ -23,15 +23,14 @@ class ScriptArguments:
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
-    model_max_length: Optional[int] = field(default=2048)
-    eval_size: Optional[float] = field(default=1000)
+    model_max_length: Optional[int] = field(default=4096)
     lora_target: Optional[str] = field(default="q_proj,v_proj")
     lora_r: Optional[int] = field(default=16)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
     cache_dir: Optional[str] = field(default="./transformers")
     buffer_len: Optional[str] = field(default=20)
-    start_text: Optional[str] = field(default="<|im_start|> assistant")
+    start_text: Optional[str] = field(default="<|im_start|> assistant\n")
 
 
 def main():
@@ -52,7 +51,7 @@ def main():
     tokenizer.pad_token = "[PAD]"
 
     # loading and prepare dataset
-    train_df = pd.read_parquet("fine-tune-summary-train.parquet")
+    train_df = pd.read_parquet(script_args.dataset_path)
     if train_df.shape[0] > script_args.sample:
         train_df = train_df.sample(n=script_args.sample, random_state=93)
     train_df["body"] = train_df.apply(
@@ -112,7 +111,7 @@ def main():
     trainer.accelerator.wait_for_everyone()
 
 
-if __name__ == "__main__":
+def test_tokenizer(model):
     with open("./hf_token", "r") as fp:
         hf_token = fp.read().strip()
 
@@ -135,3 +134,7 @@ if __name__ == "__main__":
     print(tokenizer(text))
     for id in tokenizer(text)["input_ids"]:
         print(tokenizer.decode([id]), end="")
+
+
+if __name__ == "__main__":
+    main()

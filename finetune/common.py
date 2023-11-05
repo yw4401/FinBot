@@ -35,37 +35,30 @@ def truncate_summary_example_chat(system, question, body, summary, tokenizer, ma
     return restrict_article(body, body_tokens, tokenizer)
 
 
-def truncate_summary_example_plain(question, body, summary, tokenizer, max_context,
-                                   input_template=config.PLAIN_INPUT_TEMPLATE,
-                                   output_template=config.PLAIN_OUTPUT_TEMPLATE, seq2seq=True, buffer=20):
-    final_input = input_template.format(body=body, question=question)
-    final_output = output_template.format(summary=summary)
-    if seq2seq:
-        final_text = final_input
-    else:
-        final_text = final_input + "\n" + final_output
-    body_tokens = max_context - len(tokenizer.encode(final_text, add_special_tokens=False)) - buffer
-    return restrict_article(body, body_tokens, tokenizer)
+def format_llama_sum_user(example):
+    return config.LLAMA_USER_SUMMARY_TEMPLATE.format(context=example["body"], question=example["question"])
 
 
-def format_llama_sum_user(question, body):
-    return config.LLAMA_USER_TEMPLATE.format(context=body, question=question)
+def format_llama_qa_user(example):
+    return config.LLAMA_USER_QA_TEMPLATE.format(context=example["body"], question=example["question"])
 
 
-def format_llama_sum_resp(summary):
-    return config.LLAMA_S_TEMPLATE.format(summary=summary)
+def format_llama_sum_resp(example):
+    return config.LLAMA_AI_SUMMARY_TEMPLATE.format(summary=example["summary"])
 
 
-def format_summary_example(example, tokenizer, template=None):
+def format_llama_qa_resp(example):
+    return config.LLAMA_AI_QA_TEMPLATE.format(response=example["response"])
+
+
+def format_llama_example(example, system, user_func, resp_func, tokenizer, template=None):
     output_texts = []
     for i in range(len(example['body'])):
-        q = example["question"][i]
-        c = example["body"][i]
-        s = format_llama_sum_resp(example["summary"][i])
+        s = resp_func(example[i])
+        user = user_func(example[i])
 
-        user = format_llama_sum_user(q, c)
         text = tokenizer.apply_chat_template([
-            {"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
+            {"role": "system", "content": system},
             {"role": "user", "content": user},
             {"role": "assistant", "content": s}
         ], tokenize=False, chat_template=template)
@@ -76,6 +69,16 @@ def format_summary_example(example, tokenizer, template=None):
         output_texts.append(text)
 
     return output_texts
+
+
+def format_summary_example(example, tokenizer, template=None):
+    return format_llama_example(example, config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
+                                format_llama_sum_user, format_llama_sum_resp, tokenizer, template)
+
+
+def format_qa_example(example, tokenizer, template=None):
+    return format_llama_example(example, config.LLAMA_QA_SYSTEM_INSTRUCTION,
+                                format_llama_qa_user, format_llama_qa_resp, tokenizer, template)
 
 
 def find_target_modules(model):

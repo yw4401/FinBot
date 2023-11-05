@@ -1,6 +1,8 @@
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
+from streamlit.string_util import escape_markdown
+
 import summarizer.ner as ner
 import summarizer.uiinterface as ui
 
@@ -71,15 +73,15 @@ def display_summary_response(text, period):
 
     # Display the QA placeholder
     st.write("### Response")
-    st.write(response["qa"])
+    st.write(escape_markdown(ui.tex_escape(response["qa"])))
     st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
     for summary in response["summaries"]:
-        st.write(f"###### {summary['title'].strip()}")
+        st.write(f"###### {ui.tex_escape(escape_markdown(summary['title'].strip()))}\n")
         # Create bullet points for each keypoint
         for keypoint in summary["keypoints"]:
-            st.markdown(f"- {keypoint}")
+            st.write(f"- {ui.tex_escape(escape_markdown(keypoint))}\n")
 
         st.write("")  # Add an empty line for separation
 
@@ -98,9 +100,11 @@ def plot_data(data, ticker_symbol, summary, kpis):
 
         st.plotly_chart(fig)
 
-    st.markdown(f"### **Key KPIs: {ticker_symbol}**")
+    st.markdown(f"### **{ticker_symbol}**")
 
     for category, metrics in kpis.items():
+        if len(metrics) == 0:
+            continue
 
         # Using Streamlit expander to create collapsible sections for each category
         with st.expander(category, expanded=False):
@@ -115,7 +119,7 @@ def plot_data(data, ticker_symbol, summary, kpis):
             st.write(table_md)
             st.write("\n")
 
-    st.markdown("### **Company Summary:**")
+    st.markdown("#### **Company Summary:**")
     st.write(summary)
 
     st.write("\nSource:")
