@@ -29,7 +29,7 @@ def truncate_summary_example_chat(system, question, body, summary, tokenizer, ma
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": format_llama_sum_user({"question": question, "body": ""})},
-        {"role": "assistant", "content": format_llama_sum_resp(summary)}
+        {"role": "assistant", "content": format_llama_sum_resp({"summary": summary})}
     ]
     body_tokens = max_context - len(tokenizer.apply_chat_template(messages, chat_template=template)) - buffer
     return restrict_article(body, body_tokens, tokenizer)
