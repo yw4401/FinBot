@@ -22,19 +22,29 @@ def display_summary_response(text, period):
     with st.spinner("Thinking"):
         response = ui.finbot_response(text, period)
 
-    # Display the QA placeholder
-    st.write("### Response")
-    st.write(escape_markdown(ui.tex_escape(response["qa"]["answer"])))
-    with st.expander("Sources"):
-        format_sources(response["qa"]["sources"])
-        st.write("")
-    st.write("")  # Add an empty line for separation
+    # Display the QA if exists
+    resp_text = []
+    answer = response["qa"]["answer"]
+    if "sorry" not in answer.lower():
+        st.write("### Direct Answer")
+        resp_text.append(answer)
+        st.write(escape_markdown(ui.tex_escape(answer)))
+        with st.expander("Sources"):
+            format_sources(response["qa"]["sources"])
+            st.write("")
+        st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
-    for summary in response["summaries"]:
+    valid_summaries = [summary for summary in response["summaries"] if "impossible to answer" not in summary["title"].lower()]
+    if len(valid_summaries) > 0:
+        st.write("### Related to Your Query")
+    for summary in valid_summaries:
+        title = ui.tex_escape(escape_markdown(summary['title'].strip()))
         st.write(f"**{ui.tex_escape(escape_markdown(summary['title'].strip()))}**\n")
+        resp_text.append(title)
         # Create bullet points for each keypoint
         for keypoint in summary["keypoints"]:
+            resp_text.append(keypoint)
             st.write(f"- {ui.tex_escape(escape_markdown(keypoint))}\n")
 
         st.write("")
@@ -43,7 +53,10 @@ def display_summary_response(text, period):
             st.write("")
         st.write("")  # Add an empty line for separation
 
-    return response
+    if len(resp_text) == 0:
+        st.write("Sorry, we were unable to find anything related to your query.")
+
+    return resp_text
 
 
 def plot_data(data, ticker_symbol, summary, kpis):
@@ -84,15 +97,15 @@ def plot_data(data, ticker_symbol, summary, kpis):
     st.markdown(f"[Yahoo Finance](https://finance.yahoo.com/quote/{ticker_symbol})")
 
 
-def create_screener(user_text, qa_resp, period):
-    str_resp = ner.format_response_for_ner(qa_resp)
+def create_screener(user_text, resp_text, period):
+    str_resp = ". ".join(resp_text)
     with st.spinner("Extracting symbols"):
         ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
-        print(ticker_symbol)
     if len(ticker_symbol) != 0:
-        st.write("### Screener")
         with st.spinner("Fetching Info"):
             results = asyncio.run(ui.fetch_all_tickers(ticker_symbol, user_text, period))
+            if len(results) > 0:
+                st.write("### You may be interested in:")
             for ticker, data, summary, result in results[:3]:
                 with st.expander(label=ticker, expanded=False):
                     plot_data(data, ticker, summary, result)
@@ -101,11 +114,12 @@ def create_screener(user_text, qa_resp, period):
 
 def qa_ux(user_text, period):
     qa_resp = display_summary_response(user_text, period)
-    create_screener(user_text, qa_resp, period)
+    if len(qa_resp) > 0:
+        create_screener(user_text, qa_resp, period)
 
 
 def investment_advice():
-    return True
+    return False
 
 
 def investment_ux(user_text, period):
@@ -122,6 +136,8 @@ def main():
     user_text = st.text_input("Enter your question here:")
     period = st.selectbox("Select the period:",
                           ["1d", "5d", "1mo", "3mo", "6mo"])
+    st.write("**Note: As a large language model, FinBot can only guarantee best effort correctness of the response**")
+    st.write("_Always double check the responses for substantial decisions_")
 
     # Follow up logic
 

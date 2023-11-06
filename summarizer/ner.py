@@ -57,19 +57,6 @@ def build_ticker_extraction_chain(llm):
     return llm_chain
 
 
-def format_response_for_ner(response):
-    """
-    Formats the string used to extract ticker symbols from the response dict.
-
-    :param response: the response dict from qa and summarization
-    :returns: a single string that can be used with extract_company_ticker
-    """
-
-    template = "{answer}\n{keypoints}"
-    keypoints = sum([[k["title"]] + k["keypoints"] for k in response["summaries"]], [])
-    return template.format(answer=response["qa"]["answer"], keypoints=". ".join(keypoints))
-
-
 def extract_company_ticker(query, response):
     """
     extracts a list of relevant ticker symbols given a query and response
