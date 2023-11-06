@@ -23,7 +23,7 @@ import gc
 
 
 def get_topicless_articles(client, model):
-    query = "SELECT CA.id, CA.title, CA.body, CA.published " \
+    query = "SELECT CA.id, CA.title, CA.coref, CA.published " \
             "FROM Articles.CleanedArticles AS CA LEFT JOIN Articles.ArticleTopic TA ON CA.id = TA.article_id " \
             f"WHERE TA.article_id IS NULL AND (TA.model != %s OR TA.model IS NULL) AND " \
             f"CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_FIT_RANGE_DAY} DAY)"
@@ -39,7 +39,7 @@ def get_topicless_articles(client, model):
 
 
 def get_fitting_articles(client):
-    query = "SELECT id, title, body, published " \
+    query = "SELECT id, title, coref, published " \
             "FROM Articles.CleanedArticles AS CA WHERE CA.published >= " \
             f"TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_FIT_RANGE_DAY} DAY)"
     results = []

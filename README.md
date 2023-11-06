@@ -41,7 +41,9 @@ when COVID hit, it can be apparent that companies related to making remote work 
 situation. However, in addition to the consumer facing 
 products such as Zoom, the products further upstream such as various cloud hosting services, data center properties, 
 and chip manufacturers also experienced a boost in demand. However, for the retail investors, unless the area 
-happens to fall into their expertise, such information may be an unknown unknown to them. 
+happens to fall into their expertise, such information may be an unknown unknown to them.
+
+![User View](images/unknown_unknown.png)
 
 #### Staying up-to-date
 
