@@ -112,8 +112,7 @@ Our work to implement the process can be roughly divided into four main parts:
 
 - Data Ingestion: Scraping news articles/KPIs and enriching them with additional information
 - Model Improvements: Fine-tuning the LLMs to achieve desired performance and output format
-- Informative Generation: Generating outputs via LLMs and augmenting the output with additional information
-- Advice Generation: Helping users to pick assets via LLMs
+- Output Generation: Generating outputs via LLMs and augmenting the output with additional information
 
 ### Data Ingestion for Articles
 
@@ -170,7 +169,7 @@ the articles for output generation by chunking the article texts and indexing th
 
 Once the indices are built, the solution is ready to generate informative output for the users.
 
-### Output Generation for Informing User
+### Output Generation
 
 The final output to the user consists of three main segments:
 - Direct answer to user query
@@ -192,10 +191,6 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - A model fine-tuned on reading comprehension based free-form QA is used to directly answer the user query
 - Raw text generation is enriched via publicly available metrics such as P/E ratio, Cashflow etc based on companies mentioned in the query and output
 - The Streamlit UI combines the QA generation, the summarized key-points, and the KPIs in a coherent page for the user.
-
-### Output Generation for Financial Advice
-
-TODO: Add once done
 
 ### Model Improvements
 
