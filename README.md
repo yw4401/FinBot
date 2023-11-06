@@ -18,6 +18,9 @@
 
 TODO. Add when the demo video is done.
 
+https://github.com/yw4401/FinBot/assets/54665534/68cd80b2-e0b9-41ef-9cd8-1f75ae633193
+
+
 ## About FinBot <a name="background"></a>
 
 FinBot is an AI driven web application capable of analyzing financially related news articles and provide 
