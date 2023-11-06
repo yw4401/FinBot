@@ -70,7 +70,7 @@ articles
 #### Question Answering
 
 Given any question about business news or developments in a time frame, FinBot can help user to get the information 
-they need quickly. The users can stay up-to-date quickly and painlessly.
+they need quickly.
 
 ![QA Screenshot](images/qa_screenshot.png)
 
