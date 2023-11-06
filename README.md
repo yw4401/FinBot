@@ -39,7 +39,7 @@ products such as Zoom, the products further upstream such as various cloud hosti
 and chip manufacturers also experienced a boost in demand. However, for the retail investors, unless the area 
 happens to fall into their expertise, such information may be an unknown unknown to them.
 
-![User View](images/unknown_unknown.png)
+<img src="images/unknown_unknown.png" alt="drawing" width="768"/>
 
 #### Staying up-to-date
 
@@ -58,7 +58,7 @@ number of retail investors. In recent years, the growth of ESG suggests that inv
 such as delivering social impact, by means of their investment. In addition, getting financial advice can be costly, 
 and the interest of the hired advisor may not truly be aligned with the interest of the investor.
 
-![ESG](images/esg.png)
+<img src="images/esg.png" alt="drawing" width="768"/>
 
 The aim of the project is to alleviate those pain-points by reducing the information asymmetry that leads to less efficient 
 investment choices by retail investors compared to a dedicated advisor or asset manager. Utilizing the power of AI, we provide 
@@ -72,21 +72,21 @@ articles
 Given any question about business news or developments in a time frame, FinBot can help user to get the information 
 they need quickly.
 
-![QA Screenshot](images/qa_screenshot.png)
+<img src="images/qa_screenshot.png" alt="drawing" width="768"/>
 
 #### Key-points Summarization
 
 For each question, FinBot helps user to expand their view by summarizing key-points from different topics related 
 to their inquiry.
 
-![Summary Screenshot](images/keypoints_screenshot.png)
+<img src="images/keypoints_screenshot.png" alt="drawing" width="768"/>
 
 #### Built-in KPI Viewer
 
 FinBot automatically extracts relevant companies for each query, and present selected KPIs to the users. The users 
 would be able to learn about different companies at a glance.
 
-![Screener](images/stock_screenshot.png)
+<img src="images/stock_screenshot.png" alt="drawing" width="768"/>
 
 #### On-demand Financial Advice
 
@@ -106,7 +106,7 @@ and reasoning ability of the LLMs to create the outputs for the users.
 
 ### High Level Process Flow
 
-![Architecture](images/arch_high.png)
+<img src="images/arch_high.png" alt="drawing" width="768"/>
 
 Our work to implement the process can be roughly divided into four main parts:
 
@@ -120,7 +120,7 @@ The data collection pipeline collects and aggregate news articles. Then, it appl
 co-reference resolution, topic modeling, text embedding, NER, and Min-Hash to augment the articles. Finally, it prepares 
 the articles for output generation by chunking the article texts and indexing the chunks.
 
-![Ingestion](images/ingestion.png)
+<img src="images/ingestion.png" alt="drawing" width="768"/>
 
 #### Web Scraping for Data Collection ([scraper](scraper))
 - We've gathered data from prominent news sources, including CNBC, The New York Times, and Reuters, as part of the data collection phase. The [common.py](scraper/common.py) is a framework that serves as the backbone for the web scraper. It encapsulates the essential functionality of traversing HTML pages by following links, verifying if a URL has already been scraped, and progressing to the subsequent page.
@@ -176,7 +176,7 @@ The final output to the user consists of three main segments:
 - Key-points/Insights from Top Topics Relevant to User Query
 - KPIs of companies related to the query and generated outputs
 
-![Output Generation](images/output_gen.png)
+<img src="images/output_gen.png" alt="drawing" width="768"/>
 
 The algorithms for handling output is located in the [summarizer](summarizer) directory.
 
@@ -220,7 +220,7 @@ The training setup can be described as a way to minimize the distance between th
 question and associated answer candidates without making all the embeddings similar to each other. The loss function 
 used is identical to the Multiple Negatives loss described in [Efficient Natural Language Response Suggestion for Smart Reply](https://arxiv.org/pdf/1705.00652.pdf)
 
-![Training Process](images/embedding_tune.png)
+<img src="images/embedding_tune.png" alt="drawing" width="768"/>
 
 The fine-tuning followed a standard train-eval loop for 10 epochs on the FIQA train/eval splits. The default hyper-parameters 
 from sentence transformers were applied. After running through the 10 epochs, checkpoint with the best max(MAP@2, MAP@3) score 
@@ -283,7 +283,7 @@ From our initial evaluation, we determined that while both models did not meet o
 cases via a prompt engineering approach, Mistral is closer to our goal from an output perspective. Furthermore, Mistral 
 has proven itself on the Huggingface Leaderboard. Thus, we decided to move forward with Open-Orca-Mistral7B.
 
-##### Model Finetuning
+##### Model Finetuning ([finetune](finetune))
 
 We fine-tuned the Mistral model using the standard language modeling objective on the training split of our article dataset using half-precision LORA with the following hyper-parameters:
 - Epoch: 4
