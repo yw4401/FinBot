@@ -72,21 +72,21 @@ articles
 Given any question about business news or developments in a time frame, FinBot can help user to get the information 
 they need quickly. The users can stay up-to-date quickly and painlessly.
 
-INSERT SCREENSHOT HERE
+![QA Screenshot](images/qa_screenshot.png)
 
 #### Key-points Summarization
 
 For each question, FinBot helps user to expand their view by summarizing key-points from different topics related 
 to their inquiry.
 
-INSERT SCREENSHOT HERE
+![Summary Screenshot](images/keypoints_screenshot.png)
 
 #### Built-in KPI Viewer
 
 FinBot automatically extracts relevant companies for each query, and present selected KPIs to the users. The users 
 would be able to learn about different companies at a glance.
 
-INSERT SCREENSHOT HERE
+![Screener](images/stock_screenshot.png)
 
 #### On-demand Financial Advice
 
