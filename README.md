@@ -193,6 +193,10 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - Raw text generation is enriched via publicly available metrics such as P/E ratio, Cashflow etc based on companies mentioned in the query and output
 - The Streamlit UI combines the QA generation, the summarized key-points, and the KPIs in a coherent page for the user.
 
+### Output Generation for Financial Advice
+
+TODO: Add once done
+
 ### Model Improvements
 
 In addition to creating envelops around LLMs, we customized the pre-trained models for our solution:
