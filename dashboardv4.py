@@ -99,6 +99,23 @@ def create_screener(user_text, qa_resp, period):
                     st.write(f"https://finance.yahoo.com/quote/{ticker}")
 
 
+def qa_ux(user_text, period):
+    qa_resp = display_summary_response(user_text, period)
+    create_screener(user_text, qa_resp, period)
+
+
+def investment_advice():
+    return True
+
+
+def investment_ux(user_text, period):
+    # add extra ui
+    pass
+    # add output
+    pass
+    pass
+
+
 def main():
     st.title("FinBot")
 
@@ -106,9 +123,13 @@ def main():
     period = st.selectbox("Select the period:",
                           ["1d", "5d", "1mo", "3mo", "6mo"])
 
+    # Follow up logic
+
     if st.button("Ask Finbot") and len(user_text.strip()) > 0:
-        qa_resp = display_summary_response(user_text, period)
-        create_screener(user_text, qa_resp, period)
+        if investment_advice():
+            investment_ux(user_text, period)
+        else:
+            qa_ux(user_text, period)
 
 
 if __name__ == "__main__":
