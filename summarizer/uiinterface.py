@@ -1,18 +1,22 @@
-import requests
-import urllib
-from contextlib import closing
-
 import asyncio
 import datetime
-from langchain.chat_models import ChatVertexAI, ChatOpenAI
-from langchain.llms import OpenAI
-from langchain.embeddings import SentenceTransformerEmbeddings
-from langchain.vectorstores.elasticsearch import ElasticsearchStore
-import summarizer.config as config
-from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics
-import streamlit as st
+import re
+import urllib
+import urllib.parse
+from contextlib import closing
+
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
+import streamlit as st
+from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.llms import OpenAI, VertexAI
+from langchain.vectorstores.elasticsearch import ElasticsearchStore
+import httpx
+from pstock import Bars
+
+import summarizer.config as config
+import summarizer.ner as ner
+from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics
 
 with open(config.ES_KEY_PATH, "r") as fp:
     es_key = fp.read().strip()
@@ -36,47 +40,51 @@ class YFinance:
     def __str__(self):
         return self.yahoo_ticker
 
-    def _get_yahoo_cookie(self):
-        cookie = None
-
+    async def _get_yahoo_cookie(self):
         headers = {self.user_agent_key: self.user_agent_value}
-        response = requests.get("https://fc.yahoo.com",
-                                headers=headers,
-                                allow_redirects=True)
+        client = httpx.AsyncClient()
+        try:
+            response = await client.get("https://fc.yahoo.com", headers=headers, follow_redirects=True)
 
-        if not response.cookies:
-            raise Exception("Failed to obtain Yahoo auth cookie.")
+            if not response.cookies:
+                raise Exception("Failed to obtain Yahoo auth cookie.")
 
-        cookie = list(response.cookies)[0]
+            return dict(response.cookies)
+        finally:
+            await client.aclose()
 
-        return cookie
-
-    def _get_yahoo_crumb(self, cookie):
-        crumb = None
-
+    async def _get_yahoo_crumb(self, cookie):
         headers = {self.user_agent_key: self.user_agent_value}
+        client = httpx.AsyncClient()
+        try:
+            crumb_response = await client.get("https://query1.finance.yahoo.com/v1/test/getcrumb",
+                                              headers=headers, follow_redirects=True,
+                                              cookies=cookie)
+            crumb = crumb_response.text
 
-        crumb_response = requests.get(
-            "https://query1.finance.yahoo.com/v1/test/getcrumb",
-            headers=headers,
-            cookies={cookie.name: cookie.value},
-            allow_redirects=True,
-        )
-        crumb = crumb_response.text
+            if crumb is None:
+                raise Exception("Failed to retrieve Yahoo crumb.")
+            return crumb
+        finally:
+            await client.aclose()
 
-        if crumb is None:
-            raise Exception("Failed to retrieve Yahoo crumb.")
+    async def aget_bars(self, period):
+        interval_map = {
+            "1d": "30m",
+            "5d": "1h",
+            "1mo": "1d",
+            "3mo": "1d",
+            "6mo": "1d"
+        }
 
-        return crumb
+        temp = await Bars.get(self.yahoo_ticker, period=period, interval=interval_map[period])
+        return temp.df
 
-    @property
-    @st.cache_data(hash_funcs={"summarizer.uiinterface.YFinance": hash}, ttl="1d")
-    def info(self):
+    async def aget_info(self):
         # Yahoo modules doc informations :
         # https://cryptocointracker.com/yahoo-finance/yahoo-finance-api
-        cookie = self._get_yahoo_cookie()
-        crumb = self._get_yahoo_crumb(cookie)
-        info = {}
+        cookie = await self._get_yahoo_cookie()
+        crumb = await self._get_yahoo_crumb(cookie)
         ret = {}
 
         headers = {self.user_agent_key: self.user_agent_value}
@@ -92,30 +100,69 @@ class YFinance:
                f"?modules={urllib.parse.quote_plus(yahoo_modules)}"
                f"&ssl=true&crumb={urllib.parse.quote_plus(crumb)}")
 
-        info_response = requests.get(url,
-                                     headers=headers,
-                                     cookies={cookie.name: cookie.value},
-                                     allow_redirects=True)
+        client = httpx.AsyncClient()
+        try:
+            info_response = await client.get(url, headers=headers, follow_redirects=True, cookies=cookie)
+            info = info_response.json()
+            if not info["quoteSummary"] or not info["quoteSummary"]["result"]:
+                raise FileNotFoundError(self.yahoo_ticker)
+            info = info['quoteSummary']['result'][0]
 
-        info = info_response.json()
-        if not info["quoteSummary"] or not info["quoteSummary"]["result"]:
-            raise FileNotFoundError(self.yahoo_ticker)
-        info = info['quoteSummary']['result'][0]
+            for mainKeys in info.keys():
+                for key in info[mainKeys].keys():
+                    if isinstance(info[mainKeys][key], dict):
+                        try:
+                            ret[key] = info[mainKeys][key]['raw']
+                        except (KeyError, TypeError):
+                            pass
+                    else:
+                        ret[key] = info[mainKeys][key]
 
-        for mainKeys in info.keys():
-            for key in info[mainKeys].keys():
-                if isinstance(info[mainKeys][key], dict):
-                    try:
-                        ret[key] = info[mainKeys][key]['raw']
-                    except (KeyError, TypeError):
-                        pass
-                else:
-                    ret[key] = info[mainKeys][key]
+            return ret
+        finally:
+            await client.aclose()
 
-        return ret
+    @property
+    def info(self):
+        return asyncio.run(self.aget_info())
 
     def __hash__(self):
         return hash(self.yahoo_ticker)
+
+
+async def fetch_yahoo_kpi(ticker_symbol):
+    ticker = YFinance(ticker_symbol)
+    info = await ticker.aget_info()
+    market_cap = info["marketCap"]
+    if not market_cap:
+        raise FileNotFoundError(ticker_symbol)
+    return info
+
+
+async def fetch_yahoo_data(ticker, period):
+    ticker = YFinance(ticker)
+    return await ticker.aget_bars(period)
+
+
+async def fetch_ticker(ticker_symbol, query, period):
+    info, data = await asyncio.gather(fetch_yahoo_kpi(ticker_symbol), fetch_yahoo_data(ticker_symbol, period))
+    summary = info.get('longBusinessSummary', 'No summary available.')
+    kpis = await ner.extract_relevant_field(query, summary, info)
+    result = {}
+    for g in kpis.groups:
+        if g.group_title not in result:
+            result[g.group_title] = {}
+        for m in g.group_members:
+            if m in info:
+                result[g.group_title][m] = info[m]
+
+    return ticker_symbol, data, summary, result
+
+
+async def fetch_all_tickers(tickers, query, period):
+    coros = [fetch_ticker(t, query, period) for t in tickers]
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    return [r for r in results if not isinstance(r, Exception)]
 
 
 @st.cache_resource
@@ -161,6 +208,42 @@ def get_model_num():
                 return cursor.fetchone()[0]
 
 
+def tex_escape(text):
+    """
+        :param text: a plain text message
+        :return: the message escaped to appear correctly in LaTeX
+    """
+    return text.replace("$", "＄")
+
+
+def escape_markdown(text: str, version: int = 1, entity_type: str = None) -> str:
+    """
+    Helper function to escape telegram markup symbols.
+
+    Args:
+        text (:obj:`str`): The text.
+        version (:obj:`int` | :obj:`str`): Use to specify the version of telegrams Markdown.
+            Either ``1`` or ``2``. Defaults to ``1``.
+        entity_type (:obj:`str`, optional): For the entity types ``PRE``, ``CODE`` and the link
+            part of ``TEXT_LINKS``, only certain characters need to be escaped in ``MarkdownV2``.
+            See the official API documentation for details. Only valid in combination with
+            ``version=2``, will be ignored else.
+    """
+    if int(version) == 1:
+        escape_chars = r'_*`['
+    elif int(version) == 2:
+        if entity_type in ['pre', 'code']:
+            escape_chars = r'\`'
+        elif entity_type == 'text_link':
+            escape_chars = r'\)'
+        else:
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+    else:
+        raise ValueError('Markdown version must be either 1 or 2!')
+
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+
+
 def get_qa_llm(kind=config.QA_MODEL, max_token=256):
     """
     Gets a langchain LLM for QA.
@@ -170,10 +253,10 @@ def get_qa_llm(kind=config.QA_MODEL, max_token=256):
     """
 
     if kind == "vertexai":
-        plan_llm = ChatVertexAI(
+        plan_llm = VertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
-            model_name="chat-bison",
+            model_name="text-bison",
             max_output_tokens=max_token
         )
         return plan_llm
@@ -198,16 +281,17 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
     """
 
     if kind == "vertexai":
-        plan_llm = ChatVertexAI(
+        plan_llm = VertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
-            model_name="chat-bison",
+            model_name="text-bison",
             max_output_tokens=max_token
         )
         return plan_llm
     elif kind == "custom":
         plan_llm = OpenAI(openai_api_base=config.SUM_API_SERVER, model_name=config.SUM_API_MODEL,
-                          max_tokens=max_token, temperature=0, openai_api_key="EMPTY", verbose=True)
+                          max_tokens=max_token, temperature=0,
+                          openai_api_key="EMPTY", presence_penalty=1)
         return plan_llm
     elif kind == "openai":
         with open(config.OPENAI_API) as fp:
@@ -220,7 +304,7 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
         raise NotImplemented()
 
 
-def answer_question(query, now, delta, model, topics):
+async def answer_question(query, now, delta, model, topics):
     """
     Creates an async task to answer the user's query for a set of topics
 
@@ -238,8 +322,12 @@ def answer_question(query, now, delta, model, topics):
                                             now=now,
                                             model=model,
                                             topics=topics)
-    qa_agg_chain = topic_aggregate_chain(plan_llm, retriever, return_source_documents=True, verbose=True)
-    return asyncio.create_task(qa_agg_chain.acall(query))
+    qa_agg_chain = topic_aggregate_chain(plan_llm, retriever)
+    qa_result = await qa_agg_chain.acall(query)
+    return {
+        "answer": qa_result["result"].replace("\n\n", "\n").strip(),
+        "sources": qa_result["source_documents"]
+    }
 
 
 def find_summaries(query, topics, model, now, delta):
@@ -277,7 +365,7 @@ async def get_qa_result(query, now, delta, model):
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)
 
     return {
-        "qa": qa_completed["result"].replace("\n\n", "\n").strip(),
+        "qa": qa_completed,
         "summaries": summaries
     }
 
@@ -303,3 +391,8 @@ def finbot_response(text, period):
     delta = period_map[period]
     topic_model = get_model_num()
     return asyncio.run(get_qa_result(text, now, delta, topic_model))
+
+
+if __name__ == "__main__":
+    ticker = YFinance("AAPL")
+    print(ticker.info)

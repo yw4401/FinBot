@@ -223,8 +223,7 @@ def get_unindexed_topics(client: bq.Client):
             f"WHERE TAT.article_id = CA.id AND TAT.topic_prob >= {config.TOPIC_EMBED_TOP_THRESHOLD} " \
             f"GROUP BY TAT.model, TAT.topic) AS TDT, " \
             f"Articles.TopicSummary AS TS, " \
-            f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM " \
-            f"WHERE NOT TM.servable GROUP BY TM.id) AS NM " \
+            f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM GROUP BY TM.id) AS NM " \
             f"WHERE NM.id = TDT.model AND TDT.model = TS.model AND TDT.topic = TS.topic ORDER BY TS.topic ASC"
     result = []
     with closing(bqapi.Connection(client=client)) as connection:
@@ -241,7 +240,7 @@ def get_articles_by_topics(client: bq.Client, model):
     Gets all articles used by a given revision of the topic model.
     """
 
-    query = ("SELECT CA.id, CA.url, CA.published, CA.source, CA.title, CA.body, ACT.topic "
+    query = ("SELECT CA.id, CA.url, CA.published, CA.source, CA.title, CA.coref, ACT.topic "
              "FROM Articles.CleanedArticles AS CA, "
              "Articles.ArticleTopic ACT "
              "WHERE CA.id = ACT.article_id AND ACT.model = %s")

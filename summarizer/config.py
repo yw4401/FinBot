@@ -45,8 +45,7 @@ ARTICLE_K = 3
 QA_RESP_PROMPT = (
     "You are an AI assistant that will answer the given question in a concise way from the given context. "
     "You MUST only use the information given in the context, and not your prior knowledge. "
-    "The response should be a well written, well formatted single paragraph, "
-    "and it should be suitable for display in Markdown format. "
+    "The response should be a well written, well formatted single paragraph. "
     "Do not include any newline or line breaks in the response."
     "If you cannot answer the question via the given context, respond with "
     '"Sorry, I cannot answer this question using the articles."\n\nBEGIN CONTEXT:\n{context}\n\n'
@@ -84,19 +83,18 @@ NER_RESPONSE_PROMPT = ("You are a helpful AI assistant that will provide the sto
                        "that can be used by Yahoo Finance."
                        "\n{format_instructions}\n\n"
                        "Text:\n{text}\n\nQuery:{query}")
-KPI_PROMPT = ("You are a helpful AI assistant that will identify the relevant KPI/metrics for a given stock. "
+KPI_PROMPT = ("You are a helpful AI assistant that will identify the top relevant KPI/metrics for a given stock. "
               "The relevance of a KPI depends on whether the user would be interested in knowing it given the query "
               "and the description of the company. "
-              "You should try to be as concise as possible in selecting the KPI. "
-              "Each selected KPI must be extremely relevant. "
               "You should group the relevant KPIs into logical sections with an "
-              "appropriate title with appropriate capitalization.\n{format_instructions}\n\n"
-              "Query: {query}\n\nCompany: {response}\n\nKPIs: {kpi}")
+              "appropriate title with appropriate capitalization.\n"
+              "KPIs: {kpi}\n\nCompany: {response}\n\nQuery: {query}\n\n"
+              "{format_instructions}")
 
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
 QA_MODEL = "vertexai"
-SUM_MODEL = "vertexai"
+SUM_MODEL = "custom"
 NER_MODEL = "vertexai"
 KPI_MODEL = "vertexai"

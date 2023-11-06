@@ -112,6 +112,49 @@ class ElasticSearchTopicRetriever(BaseRetriever):
         return chunk_results
 
 
+class ArticleChunkRetriever(BaseRetriever):
+    """
+    A LangChain retriever that retrieves article chunks from elastic search, and then augment it in a format that
+    the model expects.
+    """
+
+    #: the ElasticsearchStore for the article chunks
+    chunks_elasticstore: ElasticsearchStore
+    #: the number of article chunks to retrieve from each topic
+    chunk_k: int = config.ARTICLE_K
+    #: the topic to retrieve from
+    topic: int
+    #: a datetime.timedelta representing how far back to go
+    time_delta: datetime.timedelta
+    #: the current time
+    now: datetime.datetime
+    #: the topic model id
+    model: int
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
+        start_date = self.now - self.time_delta
+        search_args = [{"term": {"metadata.topic": self.topic}}, {"term": {"metadata.model": self.model}},
+                       {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
+        results = self.chunks_elasticstore.max_marginal_relevance_search(query=query, k=self.chunk_k,
+                                                                         filter=search_args)
+        for doc in results:
+            publish_str = f"Published: {doc.metadata['published_at'].strftime('%Y-%m-%d')}"
+            doc.page_content = publish_str + "\n" + doc.page_content.strip()
+        return results
+
+    async def aget_relevant_documents(self, query: str, *, callbacks: Callbacks = None, tags: Optional[
+        List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None, **kwargs: Any):
+        start_date = self.now - self.time_delta
+        search_args = [{"term": {"metadata.topic": self.topic}}, {"term": {"metadata.model": self.model}},
+                       {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
+        results = await self.chunks_elasticstore.amax_marginal_relevance_search(query=query, k=self.chunk_k,
+                                                                                filter=search_args)
+        for doc in results:
+            publish_str = f"Published: {doc.metadata['published_at']}"
+            doc.page_content = publish_str + "\n" + doc.page_content.strip()
+        return results
+
+
 class ChainRetriever(BaseRetriever):
     """
     An adaptor that converts BaseRetrievalQA chains into retriever for other chains. It will call each
@@ -147,7 +190,10 @@ def topic_aggregate_chain(model, retriever, **kwargs):
 
     chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.QA_RESP_PROMPT)}
     final_chain = RetrievalQA.from_chain_type(llm=model, chain_type="stuff",
-                                              retriever=retriever, chain_type_kwargs=chain_type_kwargs, **kwargs)
+                                              retriever=retriever,
+                                              chain_type_kwargs=chain_type_kwargs,
+                                              return_source_documents=True,
+                                              **kwargs)
     return final_chain
 
 
@@ -168,14 +214,11 @@ def create_keypoints_chain(chunk_db, topic, topic_model, model,
         chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.TOPIC_SUM_MISTRAL_PROMPT)}
     else:
         chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.TOPIC_SUM_GENERIC_PROMPT)}
-    start_date = now - delta
-    search_args = {'k': k, 'fetch_k': k * 3,
-                   "filter":
-                       [{"term": {"metadata.topic": topic}}, {"term": {"metadata.model": topic_model}},
-                        {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]}
+    retriever = ArticleChunkRetriever(chunks_elasticstore=chunk_db, chunk_k=k, topic=topic,
+                                      time_delta=delta, now=now, model=topic_model)
     chain = RetrievalQA.from_chain_type(llm=model, chain_type="stuff",
-                                        retriever=chunk_db.as_retriever(search_type="similarity",
-                                                                        search_kwargs=search_args),
+                                        retriever=retriever,
+                                        return_source_documents=True,
                                         chain_type_kwargs=chain_type_kwargs)
     return chain
 
@@ -210,7 +253,8 @@ async def aget_summaries(query, topics, now, delta, topic_model, chunk_db, model
 
         results.append({
             "title": parts[0],
-            "keypoints": parts[1:] if len(parts) > 1 else []
+            "keypoints": parts[1:] if len(parts) > 1 else [],
+            "sources": r["source_documents"]
         })
         if len(results) >= top_k:
             break

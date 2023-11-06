@@ -57,19 +57,6 @@ def build_ticker_extraction_chain(llm):
     return llm_chain
 
 
-def format_response_for_ner(response):
-    """
-    Formats the string used to extract ticker symbols from the response dict.
-
-    :param response: the response dict from qa and summarization
-    :returns: a single string that can be used with extract_company_ticker
-    """
-
-    template = "{answer}\n{keypoints}"
-    keypoints = sum([[k["title"]] + k["keypoints"] for k in response["summaries"]], [])
-    return template.format(answer=response["qa"], keypoints=". ".join(keypoints))
-
-
 def extract_company_ticker(query, response):
     """
     extracts a list of relevant ticker symbols given a query and response
@@ -106,19 +93,28 @@ def build_kpi_extraction_chain(llm):
     return llm_chain
 
 
-def extract_relevant_field(query, response, ticker):
+async def extract_relevant_field(query, response, info):
     """
     identify relevant KPIs in groups based on the query, response, and kpis available from the ticker
 
     :param query: the user query
     :param response: additional context for the query
-    :param ticker: the YFinance ticker with .info field containing the KPIs
+    :param info: a dict containing the KPIs
     :returns: RelevantKPI containing the relevant KPI groups
     """
     llm = get_kpi_llm()
     chain = build_kpi_extraction_chain(llm)
-    kpi_list = ", ".join(ticker.info.keys())
-    return asyncio.run(chain.arun({"query": query, "response": response, "kpi": kpi_list}))
+    kpi_str = ""
+    for k, v in info.items():
+        try:
+            kpi_str = f"{kpi_str}\n{k}: {float(v)}"
+        except (ValueError, TypeError):
+            pass
+
+    try:
+        return await chain.arun({"query": query, "response": response, "kpi": kpi_str.strip()})
+    except Exception:
+        return RelevantKPI(relevance="None", groups=[])
 
 
 def extract_industry(text):

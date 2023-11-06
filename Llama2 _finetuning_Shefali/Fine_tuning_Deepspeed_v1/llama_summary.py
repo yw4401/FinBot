@@ -10,7 +10,6 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    AutoConfig,
     HfArgumentParser, )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 
@@ -82,15 +81,10 @@ def main():
 
     # loading the base model
     with OnDevice(dtype=torch.bfloat16, device="meta", enabled=True):
-        try:
-            model = AutoModelForCausalLM.from_pretrained(
-                script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-                torch_dtype=torch.bfloat16, use_flash_attention_2=True, low_cpu_mem_usage=True,
-                cache_dir=script_args.cache_dir)
-        except ValueError:
-            model = AutoModelForCausalLM.from_pretrained(
-                script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-                torch_dtype=torch.bfloat16, use_flash_attention_2=True, cache_dir=script_args.cache_dir)
+        model = AutoModelForCausalLM.from_pretrained(
+            script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+            torch_dtype=torch.bfloat16, use_flash_attention_2=True, low_cpu_mem_usage=True,
+            cache_dir=script_args.cache_dir)
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 

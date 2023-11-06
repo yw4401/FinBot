@@ -10,7 +10,6 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    AutoConfig,
     HfArgumentParser, )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 
@@ -24,14 +23,15 @@ class ScriptArguments:
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
-    model_max_length: Optional[int] = field(default=4096)
+    model_max_length: Optional[int] = field(default=2048)
+    eval_size: Optional[float] = field(default=1000)
     lora_target: Optional[str] = field(default="q_proj,v_proj")
     lora_r: Optional[int] = field(default=16)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
     cache_dir: Optional[str] = field(default="./transformers")
     buffer_len: Optional[str] = field(default=20)
-    start_text: Optional[str] = field(default="<|im_start|> assistant\n")
+    start_text: Optional[str] = field(default="<|im_start|> assistant")
 
 
 def main():
@@ -52,7 +52,7 @@ def main():
     tokenizer.pad_token = "[PAD]"
 
     # loading and prepare dataset
-    train_df = pd.read_parquet(script_args.dataset_path)
+    train_df = pd.read_parquet("fine-tune-summary-train.parquet")
     if train_df.shape[0] > script_args.sample:
         train_df = train_df.sample(n=script_args.sample, random_state=93)
     train_df["body"] = train_df.apply(
@@ -82,15 +82,10 @@ def main():
 
     # loading the base model
     with OnDevice(dtype=torch.bfloat16, device="meta", enabled=True):
-        try:
-            model = AutoModelForCausalLM.from_pretrained(
-                script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-                torch_dtype=torch.bfloat16, use_flash_attention_2=True, low_cpu_mem_usage=True,
-                cache_dir=script_args.cache_dir)
-        except ValueError:
-            model = AutoModelForCausalLM.from_pretrained(
-                script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-                torch_dtype=torch.bfloat16, use_flash_attention_2=True, cache_dir=script_args.cache_dir)
+        model = AutoModelForCausalLM.from_pretrained(
+            script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+            torch_dtype=torch.bfloat16, use_flash_attention_2=True, low_cpu_mem_usage=True,
+            cache_dir=script_args.cache_dir)
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
@@ -117,7 +112,7 @@ def main():
     trainer.accelerator.wait_for_everyone()
 
 
-def test_tokenizer(model):
+if __name__ == "__main__":
     with open("./hf_token", "r") as fp:
         hf_token = fp.read().strip()
 
@@ -140,7 +135,3 @@ def test_tokenizer(model):
     print(tokenizer(text))
     for id in tokenizer(text)["input_ids"]:
         print(tokenizer.decode([id]), end="")
-
-
-if __name__ == "__main__":
-    main()

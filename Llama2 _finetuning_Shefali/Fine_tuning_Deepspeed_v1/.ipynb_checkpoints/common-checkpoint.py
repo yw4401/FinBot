@@ -40,15 +40,18 @@ def format_llama_sum_user(example):
 
 
 def format_llama_qa_user(example):
-    return config.LLAMA_USER_QA_TEMPLATE.format(context=example["body"], question=example["question"])
+    return config.LLAMA_USER_QA_TEMPLATE.format(context=example["context"], question=example["question"])
 
 
 def format_llama_sum_resp(example):
     return config.LLAMA_AI_SUMMARY_TEMPLATE.format(summary=example["summary"])
 
 
+#def format_llama_qa_resp(example):
+ #   return config.LLAMA_AI_QA_TEMPLATE.format(shefali="test")
+
 def format_llama_qa_resp(example):
-    return config.LLAMA_AI_QA_TEMPLATE.format(response=example["response"])
+    return config.LLAMA_AI_QA_TEMPLATE.format(answer=example['answers']['text'])
 
 
 def get_batch_row(examples, i):
@@ -57,7 +60,7 @@ def get_batch_row(examples, i):
 
 def format_llama_example(example, system, user_func, resp_func, tokenizer, template=None):
     output_texts = []
-    for i in range(len(example['body'])):
+    for i in range(len(example['context'])):
         s = resp_func(get_batch_row(example, i))
         user = user_func(get_batch_row(example, i))
 

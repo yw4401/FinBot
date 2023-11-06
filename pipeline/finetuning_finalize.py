@@ -16,7 +16,7 @@ if __name__ == "__main__":
     df = fix_summary_tagline(df)
     print_summaries(df)
     print("Uploading article snapshots")
-    train, test = get_data_sets_df(df, test_instances=10)
+    train, test = get_data_sets_df(df, test_instances=1000)
     print_summaries(train)
     target_url = f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_FILE_PATTERN}"
     train.to_parquet(target_url.format(split="train"), index=False)
