@@ -1,3 +1,5 @@
+import asyncio
+
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
@@ -7,64 +9,14 @@ import summarizer.ner as ner
 import summarizer.uiinterface as ui
 
 
-def fetch_data_alt(ticker_symbol, query, response, period="1y"):
-    ticker = ui.YFinance(ticker_symbol)
-    summary = ticker.info.get('longBusinessSummary', 'No summary available.')
-    market_cap = ticker.info.get("marketCap")
-    if not market_cap:
-        raise FileNotFoundError(ticker_symbol)
-
-    kpis = ner.extract_relevant_field(query, summary, ticker)
-    result = {}
-    for g in kpis.groups:
-        if g.group_title not in result:
-            result[g.group_title] = {}
-        for m in g.group_members:
-            if m in ticker.info:
-                result[g.group_title][m] = ticker.info[m]
-
-    return None, summary, result
-
-
-def fetch_data(ticker_symbol, period="1y"):
-    ticker = yf.Ticker(ticker_symbol)
-    data = ticker.history(period=period)
-    summary = ticker.info.get('longBusinessSummary', 'No summary available.')
-
-    kpis = {
-        "Basic": {
-            "Market Cap($)": ticker.info.get("marketCap"),
-            "Total Enterprise Value (TEV)($)": ticker.info.get("enterpriseValue"),
-            "Total Revenues($)": ticker.info.get("totalRevenue")
-        },
-        "Profitability": {
-            "Gross Profit Margin(%)": ticker.info.get("grossMargins"),
-            "EBITDA Margin(%)": ticker.info.get("ebitdaMargins"),
-            "Operating Margin(%)": ticker.info.get("operatingMargin"),
-            "Net Profit Margin(%)": ticker.info.get("netProfitMargin"),
-            "Pre-Tax Profit Margin(%)": ticker.info.get("profitMargins")
-        },
-        "Per Share": {
-            "Revenue per Share($)": ticker.info.get("revenuePerShare"),
-            "EPS Diluted($)": ticker.info.get("trailingEps")
-        },
-        "Employees": {
-            "Total Employees": ticker.info.get("fullTimeEmployees")
-        },
-        "Valuation": {
-            "EV/Sales": ticker.info.get("enterpriseToRevenue"),
-            "P/E": ticker.info.get("trailingPE"),
-            "EV/EBITDA": ticker.info.get("enterpriseToEbitda"),
-            "P/B": ticker.info.get("priceToBook"),
-
-        },
-        "Forward Valuation": {
-
-            "Forward P/E": ticker.info.get("forwardPE")
-        }
-    }
-
-    return data, summary, kpis
+def format_sources(sources):
+    existing_sources = set()
+    existing_title = set()
+    for doc in sources:
+        if doc.metadata['url'] not in existing_sources and doc.metadata["title"] not in existing_title:
+            st.write(f"- [{doc.metadata['title']}]({doc.metadata['url']})")
+            existing_sources.add(doc.metadata['url'])
+            existing_title.add(doc.metadata["title"])
 
 
 def display_summary_response(text, period):
@@ -73,16 +25,23 @@ def display_summary_response(text, period):
 
     # Display the QA placeholder
     st.write("### Response")
-    st.write(escape_markdown(ui.tex_escape(response["qa"])))
+    st.write(escape_markdown(ui.tex_escape(response["qa"]["answer"])))
+    with st.expander("Sources"):
+        format_sources(response["qa"]["sources"])
+        st.write("")
     st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
     for summary in response["summaries"]:
-        st.write(f"###### {ui.tex_escape(escape_markdown(summary['title'].strip()))}\n")
+        st.write(f"**{ui.tex_escape(escape_markdown(summary['title'].strip()))}**\n")
         # Create bullet points for each keypoint
         for keypoint in summary["keypoints"]:
             st.write(f"- {ui.tex_escape(escape_markdown(keypoint))}\n")
 
+        st.write("")
+        with st.expander("Sources"):
+            format_sources(summary["sources"])
+            st.write("")
         st.write("")  # Add an empty line for separation
 
     return response
@@ -92,32 +51,30 @@ def plot_data(data, ticker_symbol, summary, kpis):
     """
     Plot the historical data, display KPIs, and the company's summary using Plotly.
     """
-    if data:
+    if data is not None:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
         fig.update_layout(title=f'{ticker_symbol} Stock Price Over Time', xaxis_title='Date',
                           yaxis_title='Close Price (in currency)')
 
-        st.plotly_chart(fig)
-
-    st.markdown(f"### **{ticker_symbol}**")
+        st.plotly_chart(fig, use_container_width=True)
 
     for category, metrics in kpis.items():
         if len(metrics) == 0:
             continue
 
         # Using Streamlit expander to create collapsible sections for each category
-        with st.expander(category, expanded=False):
-            # Begin the table markdown string
-            table_md = "| Metric | Value |\n|---|---|\n"
+        st.write(f"##### {category}")
+        # Begin the table markdown string
+        table_md = "| Metric | Value |\n|---|---|\n"
 
-            for key, value in metrics.items():
-                # Append each KPI to the table markdown string
-                table_md += f"| {key} | {value if value else 'N/A'} |\n"
+        for key, value in metrics.items():
+            # Append each KPI to the table markdown string
+            table_md += f"| {key} | {value if value else 'N/A'} |\n"
 
-            # Display the markdown table
-            st.write(table_md)
-            st.write("\n")
+        # Display the markdown table
+        st.write(table_md)
+        st.write("\n")
 
     st.markdown("#### **Company Summary:**")
     st.write(summary)
@@ -140,15 +97,22 @@ def main():
             ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
             print(ticker_symbol)
         if len(ticker_symbol) != 0:
-            for t in ticker_symbol:
-                try:
-                    with st.spinner("Fetching KPIs"):
-                        data, summary, kpis = fetch_data_alt(t, user_text, str_resp, period)
-                        plot_data(data, t, summary, kpis)
-                        st.write(f"https://finance.yahoo.com/quote/{t}")
-                    break
-                except FileNotFoundError:
-                    pass
+            st.write("### Screener")
+            coros = [ui.fetch_ticker(t, user_text, period) for t in ticker_symbol]
+            count = 0
+            for work in coros:
+                if count >= 3:
+                    work.close()
+                else:
+                    with st.spinner("Fetching Info"):
+                        try:
+                            ticker, data, summary, result = asyncio.run(work)
+                        except FileNotFoundError:
+                            continue
+                        with st.expander(label=ticker, expanded=False):
+                            plot_data(data, ticker, summary, result)
+                            st.write(f"https://finance.yahoo.com/quote/{ticker}")
+                            count = count + 1
 
 
 if __name__ == "__main__":

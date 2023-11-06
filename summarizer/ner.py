@@ -106,7 +106,7 @@ def build_kpi_extraction_chain(llm):
     return llm_chain
 
 
-def extract_relevant_field(query, response, ticker):
+async def extract_relevant_field(query, response, ticker):
     """
     identify relevant KPIs in groups based on the query, response, and kpis available from the ticker
 
@@ -125,7 +125,7 @@ def extract_relevant_field(query, response, ticker):
             pass
 
     try:
-        return asyncio.run(chain.arun({"query": query, "response": response, "kpi": kpi_str.strip()}))
+        return await chain.arun({"query": query, "response": response, "kpi": kpi_str.strip()})
     except Exception:
         return RelevantKPI(relevance="None", groups=[])
 

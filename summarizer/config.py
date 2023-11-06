@@ -92,9 +92,9 @@ KPI_PROMPT = ("You are a helpful AI assistant that will identify the top relevan
               "{format_instructions}")
 
 # Model Deployment
-SUM_API_SERVER = "http://summarizer/v1"
+SUM_API_SERVER = "http://34.29.115.82/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
 QA_MODEL = "vertexai"
-SUM_MODEL = "vertexai"
+SUM_MODEL = "custom"
 NER_MODEL = "vertexai"
 KPI_MODEL = "vertexai"

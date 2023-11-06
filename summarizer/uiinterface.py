@@ -11,8 +11,10 @@ import streamlit as st
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import OpenAI, VertexAI
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
+import yfinance as yf
 
 import summarizer.config as config
+import summarizer.ner as ner
 from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics
 
 with open(config.ES_KEY_PATH, "r") as fp:
@@ -117,6 +119,45 @@ class YFinance:
 
     def __hash__(self):
         return hash(self.yahoo_ticker)
+
+
+async def fetch_yahoo_ticker(ticker_symbol):
+    ticker = YFinance(ticker_symbol)
+    market_cap = ticker.info.get("marketCap")
+    if not market_cap:
+        raise FileNotFoundError(ticker_symbol)
+    return ticker
+
+
+async def fetch_yahoo_data(ticker, period):
+    ticker = yf.Ticker(ticker)
+    return ticker.history(period=period)
+
+
+async def fetch_ticker(ticker_symbol, query, period):
+    ticker, data = await asyncio.gather(fetch_yahoo_ticker(ticker_symbol), fetch_yahoo_data(ticker_symbol, period))
+    summary = ticker.info.get('longBusinessSummary', 'No summary available.')
+    kpis = await ner.extract_relevant_field(query, summary, ticker)
+    result = {}
+    for g in kpis.groups:
+        if g.group_title not in result:
+            result[g.group_title] = {}
+        for m in g.group_members:
+            if m in ticker.info:
+                result[g.group_title][m] = ticker.info[m]
+
+    return ticker_symbol, data, summary, result
+
+
+async def fetch_all_tickers(tickers, query, period):
+    coros = [fetch_ticker(t, query, period) for t in tickers]
+    results = []
+    for c in coros:
+        try:
+            results.append(await c)
+        except FileNotFoundError:
+            pass
+    return results
 
 
 @st.cache_resource
@@ -244,7 +285,8 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
         return plan_llm
     elif kind == "custom":
         plan_llm = OpenAI(openai_api_base=config.SUM_API_SERVER, model_name=config.SUM_API_MODEL,
-                          max_tokens=max_token, temperature=0, openai_api_key="EMPTY", verbose=True)
+                          max_tokens=max_token, temperature=0,
+                          openai_api_key="EMPTY", presence_penalty=1)
         return plan_llm
     elif kind == "openai":
         with open(config.OPENAI_API) as fp:
@@ -257,7 +299,7 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
         raise NotImplemented()
 
 
-def answer_question(query, now, delta, model, topics):
+async def answer_question(query, now, delta, model, topics):
     """
     Creates an async task to answer the user's query for a set of topics
 
@@ -275,8 +317,13 @@ def answer_question(query, now, delta, model, topics):
                                             now=now,
                                             model=model,
                                             topics=topics)
-    qa_agg_chain = topic_aggregate_chain(plan_llm, retriever, return_source_documents=True, verbose=True)
-    return asyncio.create_task(qa_agg_chain.acall(query))
+    qa_agg_chain = topic_aggregate_chain(plan_llm, retriever)
+    qa_result = await qa_agg_chain.acall(query)
+    print(qa_result)
+    return {
+        "answer": qa_result["result"].replace("\n\n", "\n").strip(),
+        "sources": qa_result["source_documents"]
+    }
 
 
 def find_summaries(query, topics, model, now, delta):
@@ -314,7 +361,7 @@ async def get_qa_result(query, now, delta, model):
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)
 
     return {
-        "qa": qa_completed["result"].replace("\n\n", "\n").strip(),
+        "qa": qa_completed,
         "summaries": summaries
     }
 
