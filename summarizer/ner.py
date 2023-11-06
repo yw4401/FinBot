@@ -67,7 +67,7 @@ def format_response_for_ner(response):
 
     template = "{answer}\n{keypoints}"
     keypoints = sum([[k["title"]] + k["keypoints"] for k in response["summaries"]], [])
-    return template.format(answer=response["qa"], keypoints=". ".join(keypoints))
+    return template.format(answer=response["qa"]["answer"], keypoints=". ".join(keypoints))
 
 
 def extract_company_ticker(query, response):
@@ -106,19 +106,19 @@ def build_kpi_extraction_chain(llm):
     return llm_chain
 
 
-async def extract_relevant_field(query, response, ticker):
+async def extract_relevant_field(query, response, info):
     """
     identify relevant KPIs in groups based on the query, response, and kpis available from the ticker
 
     :param query: the user query
     :param response: additional context for the query
-    :param ticker: the YFinance ticker with .info field containing the KPIs
+    :param info: a dict containing the KPIs
     :returns: RelevantKPI containing the relevant KPI groups
     """
     llm = get_kpi_llm()
     chain = build_kpi_extraction_chain(llm)
     kpi_str = ""
-    for k, v in ticker.info.items():
+    for k, v in info.items():
         try:
             kpi_str = f"{kpi_str}\n{k}: {float(v)}"
         except (ValueError, TypeError):

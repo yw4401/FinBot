@@ -2,16 +2,17 @@ import asyncio
 import datetime
 import re
 import urllib
+import urllib.parse
 from contextlib import closing
 
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
-import requests
 import streamlit as st
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import OpenAI, VertexAI
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
-import yfinance as yf
+import httpx
+from pstock import Bars
 
 import summarizer.config as config
 import summarizer.ner as ner
@@ -39,47 +40,51 @@ class YFinance:
     def __str__(self):
         return self.yahoo_ticker
 
-    def _get_yahoo_cookie(self):
-        cookie = None
-
+    async def _get_yahoo_cookie(self):
         headers = {self.user_agent_key: self.user_agent_value}
-        response = requests.get("https://fc.yahoo.com",
-                                headers=headers,
-                                allow_redirects=True)
+        client = httpx.AsyncClient()
+        try:
+            response = await client.get("https://fc.yahoo.com", headers=headers, follow_redirects=True)
 
-        if not response.cookies:
-            raise Exception("Failed to obtain Yahoo auth cookie.")
+            if not response.cookies:
+                raise Exception("Failed to obtain Yahoo auth cookie.")
 
-        cookie = list(response.cookies)[0]
+            return dict(response.cookies)
+        finally:
+            await client.aclose()
 
-        return cookie
-
-    def _get_yahoo_crumb(self, cookie):
-        crumb = None
-
+    async def _get_yahoo_crumb(self, cookie):
         headers = {self.user_agent_key: self.user_agent_value}
+        client = httpx.AsyncClient()
+        try:
+            crumb_response = await client.get("https://query1.finance.yahoo.com/v1/test/getcrumb",
+                                              headers=headers, follow_redirects=True,
+                                              cookies=cookie)
+            crumb = crumb_response.text
 
-        crumb_response = requests.get(
-            "https://query1.finance.yahoo.com/v1/test/getcrumb",
-            headers=headers,
-            cookies={cookie.name: cookie.value},
-            allow_redirects=True,
-        )
-        crumb = crumb_response.text
+            if crumb is None:
+                raise Exception("Failed to retrieve Yahoo crumb.")
+            return crumb
+        finally:
+            await client.aclose()
 
-        if crumb is None:
-            raise Exception("Failed to retrieve Yahoo crumb.")
+    async def aget_bars(self, period):
+        interval_map = {
+            "1d": "30m",
+            "5d": "1h",
+            "1mo": "1d",
+            "3mo": "1d",
+            "6mo": "1d"
+        }
 
-        return crumb
+        temp = await Bars.get(self.yahoo_ticker, period=period, interval=interval_map[period])
+        return temp.df
 
-    @property
-    @st.cache_data(hash_funcs={"summarizer.uiinterface.YFinance": hash}, ttl="1d")
-    def info(self):
+    async def aget_info(self):
         # Yahoo modules doc informations :
         # https://cryptocointracker.com/yahoo-finance/yahoo-finance-api
-        cookie = self._get_yahoo_cookie()
-        crumb = self._get_yahoo_crumb(cookie)
-        info = {}
+        cookie = await self._get_yahoo_cookie()
+        crumb = await self._get_yahoo_crumb(cookie)
         ret = {}
 
         headers = {self.user_agent_key: self.user_agent_value}
@@ -95,69 +100,69 @@ class YFinance:
                f"?modules={urllib.parse.quote_plus(yahoo_modules)}"
                f"&ssl=true&crumb={urllib.parse.quote_plus(crumb)}")
 
-        info_response = requests.get(url,
-                                     headers=headers,
-                                     cookies={cookie.name: cookie.value},
-                                     allow_redirects=True)
+        client = httpx.AsyncClient()
+        try:
+            info_response = await client.get(url, headers=headers, follow_redirects=True, cookies=cookie)
+            info = info_response.json()
+            if not info["quoteSummary"] or not info["quoteSummary"]["result"]:
+                raise FileNotFoundError(self.yahoo_ticker)
+            info = info['quoteSummary']['result'][0]
 
-        info = info_response.json()
-        if not info["quoteSummary"] or not info["quoteSummary"]["result"]:
-            raise FileNotFoundError(self.yahoo_ticker)
-        info = info['quoteSummary']['result'][0]
+            for mainKeys in info.keys():
+                for key in info[mainKeys].keys():
+                    if isinstance(info[mainKeys][key], dict):
+                        try:
+                            ret[key] = info[mainKeys][key]['raw']
+                        except (KeyError, TypeError):
+                            pass
+                    else:
+                        ret[key] = info[mainKeys][key]
 
-        for mainKeys in info.keys():
-            for key in info[mainKeys].keys():
-                if isinstance(info[mainKeys][key], dict):
-                    try:
-                        ret[key] = info[mainKeys][key]['raw']
-                    except (KeyError, TypeError):
-                        pass
-                else:
-                    ret[key] = info[mainKeys][key]
+            return ret
+        finally:
+            await client.aclose()
 
-        return ret
+    @property
+    def info(self):
+        return asyncio.run(self.aget_info())
 
     def __hash__(self):
         return hash(self.yahoo_ticker)
 
 
-async def fetch_yahoo_ticker(ticker_symbol):
+async def fetch_yahoo_kpi(ticker_symbol):
     ticker = YFinance(ticker_symbol)
-    market_cap = ticker.info.get("marketCap")
+    info = await ticker.aget_info()
+    market_cap = info["marketCap"]
     if not market_cap:
         raise FileNotFoundError(ticker_symbol)
-    return ticker
+    return info
 
 
 async def fetch_yahoo_data(ticker, period):
-    ticker = yf.Ticker(ticker)
-    return ticker.history(period=period)
+    ticker = YFinance(ticker)
+    return await ticker.aget_bars(period)
 
 
 async def fetch_ticker(ticker_symbol, query, period):
-    ticker, data = await asyncio.gather(fetch_yahoo_ticker(ticker_symbol), fetch_yahoo_data(ticker_symbol, period))
-    summary = ticker.info.get('longBusinessSummary', 'No summary available.')
-    kpis = await ner.extract_relevant_field(query, summary, ticker)
+    info, data = await asyncio.gather(fetch_yahoo_kpi(ticker_symbol), fetch_yahoo_data(ticker_symbol, period))
+    summary = info.get('longBusinessSummary', 'No summary available.')
+    kpis = await ner.extract_relevant_field(query, summary, info)
     result = {}
     for g in kpis.groups:
         if g.group_title not in result:
             result[g.group_title] = {}
         for m in g.group_members:
-            if m in ticker.info:
-                result[g.group_title][m] = ticker.info[m]
+            if m in info:
+                result[g.group_title][m] = info[m]
 
     return ticker_symbol, data, summary, result
 
 
 async def fetch_all_tickers(tickers, query, period):
     coros = [fetch_ticker(t, query, period) for t in tickers]
-    results = []
-    for c in coros:
-        try:
-            results.append(await c)
-        except FileNotFoundError:
-            pass
-    return results
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    return [r for r in results if not isinstance(r, Exception)]
 
 
 @st.cache_resource
@@ -319,7 +324,6 @@ async def answer_question(query, now, delta, model, topics):
                                             topics=topics)
     qa_agg_chain = topic_aggregate_chain(plan_llm, retriever)
     qa_result = await qa_agg_chain.acall(query)
-    print(qa_result)
     return {
         "answer": qa_result["result"].replace("\n\n", "\n").strip(),
         "sources": qa_result["source_documents"]
@@ -387,3 +391,8 @@ def finbot_response(text, period):
     delta = period_map[period]
     topic_model = get_model_num()
     return asyncio.run(get_qa_result(text, now, delta, topic_model))
+
+
+if __name__ == "__main__":
+    ticker = YFinance("AAPL")
+    print(ticker.info)

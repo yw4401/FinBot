@@ -1,8 +1,7 @@
 import asyncio
 
-import streamlit as st
-import yfinance as yf
 import plotly.graph_objects as go
+import streamlit as st
 from streamlit.string_util import escape_markdown
 
 import summarizer.ner as ner
@@ -52,11 +51,13 @@ def plot_data(data, ticker_symbol, summary, kpis):
     Plot the historical data, display KPIs, and the company's summary using Plotly.
     """
     if data is not None:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
+        fig = go.Figure(data=[go.Candlestick(x=data.index,
+                                             open=data['open'],
+                                             high=data['high'],
+                                             low=data['low'],
+                                             close=data['close'])])
         fig.update_layout(title=f'{ticker_symbol} Stock Price Over Time', xaxis_title='Date',
-                          yaxis_title='Close Price (in currency)')
-
+                          yaxis_title='Price (dollars)')
         st.plotly_chart(fig, use_container_width=True)
 
     for category, metrics in kpis.items():
@@ -83,6 +84,21 @@ def plot_data(data, ticker_symbol, summary, kpis):
     st.markdown(f"[Yahoo Finance](https://finance.yahoo.com/quote/{ticker_symbol})")
 
 
+def create_screener(user_text, qa_resp, period):
+    str_resp = ner.format_response_for_ner(qa_resp)
+    with st.spinner("Extracting symbols"):
+        ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
+        print(ticker_symbol)
+    if len(ticker_symbol) != 0:
+        st.write("### Screener")
+        with st.spinner("Fetching Info"):
+            results = asyncio.run(ui.fetch_all_tickers(ticker_symbol, user_text, period))
+            for ticker, data, summary, result in results[:3]:
+                with st.expander(label=ticker, expanded=False):
+                    plot_data(data, ticker, summary, result)
+                    st.write(f"https://finance.yahoo.com/quote/{ticker}")
+
+
 def main():
     st.title("FinBot")
 
@@ -92,27 +108,7 @@ def main():
 
     if st.button("Ask Finbot") and len(user_text.strip()) > 0:
         qa_resp = display_summary_response(user_text, period)
-        str_resp = ner.format_response_for_ner(qa_resp)
-        with st.spinner("Extracting symbols"):
-            ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
-            print(ticker_symbol)
-        if len(ticker_symbol) != 0:
-            st.write("### Screener")
-            coros = [ui.fetch_ticker(t, user_text, period) for t in ticker_symbol]
-            count = 0
-            for work in coros:
-                if count >= 3:
-                    work.close()
-                else:
-                    with st.spinner("Fetching Info"):
-                        try:
-                            ticker, data, summary, result = asyncio.run(work)
-                        except FileNotFoundError:
-                            continue
-                        with st.expander(label=ticker, expanded=False):
-                            plot_data(data, ticker, summary, result)
-                            st.write(f"https://finance.yahoo.com/quote/{ticker}")
-                            count = count + 1
+        create_screener(user_text, qa_resp, period)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ COPY ./dashboardv4.py $APP_HOME/
 COPY ./es_id ./es_key $APP_HOME/
 
 RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-RUN pip install streamlit elasticsearch sentence-transformers langchain tiktoken openai yfinance
+RUN pip install streamlit elasticsearch sentence-transformers langchain tiktoken openai pstock-python httpx
 RUN pip install plotly google-cloud-aiplatform
 
 ENTRYPOINT streamlit run --server.port 80 dashboardv4.py
