@@ -16,19 +16,25 @@ from tqdm import tqdm
 
 def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
-            "FROM Articles.ScrapedArticles AS SA LEFT JOIN Articles.CleanedArticles CA ON SA.id = CA.id " \
-            f"WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.ARTICLE_INGEST_MAX_DAYS} DAY)" \
-            f" AND CA.id IS NULL"
+            "FROM Articles.ScrapedArticles AS SA " \
+            f"WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.ARTICLE_INGEST_MAX_DAYS} DAY)"
+    cleaned_query = "SELECT CA.id FROM Articles.CleanedArticles AS CA " \
+                    "WHERE CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), " \
+                    f"INTERVAL {config.ARTICLE_INGEST_MAX_DAYS + 1} DAY)"
     results = []
+    existing = set()
 
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
             cursor.execute(query)
             for r in cursor.fetchall():
                 results.append(list(r))
+            cursor.execute(cleaned_query)
+            for r in cursor.fetchall():
+                existing.add(r.id)
     return pd.DataFrame(results,
                         columns=["id", "url", "source", "title", "published", "body", "summary", "summary_type",
-                                 "category"])
+                                 "category"]), existing
 
 
 def write_batch(project, batch):
@@ -56,11 +62,13 @@ def write_coref_articles(project, df, batch=10, jobs=8):
 
 
 if __name__ == "__main__":
-    client = bq.Client(project=config.GCP_PROJECT, credentials=None)
+    client = bq.Client(project=config.GCP_PROJECT)
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
 
-    src_df = get_scraped_articles(client)
-    cleaned_df = execute_deduplication(src_df)
+    src_df, ids = get_scraped_articles(client)
+    cleaned_df = execute_deduplication(src_df).copy()
+    cleaned_df["exists"] = cleaned_df.id.apply(lambda idx: idx in ids)
+    cleaned_df = cleaned_df.loc[~cleaned_df.exists]
     coref_df = add_coreference_resolution(cleaned_df, predictor=predictor, nlp=nlp)
     write_coref_articles(config.GCP_PROJECT, coref_df, batch=100)
