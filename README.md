@@ -21,9 +21,9 @@ https://github.com/yw4401/FinBot/assets/54665534/68cd80b2-e0b9-41ef-9cd8-1f75ae6
 
 ## About FinBot <a name="background"></a>
 
-FinBot is an AI driven web application capable of analyzing financially related news articles and provide 
+FinBot is an AI driven web application capable of analyzing financially related news articles and providing 
 insights to retail investors. The application can empower the users to make better investment decisions while saving 
-time and money by letting leveraging the power of LLM and retrieval augmented generation.
+time and money by leveraging the power of LLM retrieval augmented generation.
 
 ### Project Mission <a name="mission"></a>
 
