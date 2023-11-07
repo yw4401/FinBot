@@ -310,7 +310,7 @@ positives, which is acceptable since we do not want to provide potentially false
 #### Question Answering
 @Shefali, @Takuma Add once done
 
-
+![QA Model Finetuning](https://github.com/yw4401/FinBot/blob/b8b6f9b148fb28d7cdd755aa8a832e2cd0626640/images/Fine_Tune%20Q_A.png)
 
 ## Future Work
 
