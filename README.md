@@ -310,6 +310,8 @@ positives, which is acceptable since we do not want to provide potentially false
 #### Question Answering
 @Shefali, @Takuma Add once done
 
+![Tuning QAModel](images/Fine_Tune Q_A.png)
+
 ## Future Work
 
 TODO
