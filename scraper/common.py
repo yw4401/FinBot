@@ -1,4 +1,5 @@
 import datetime
+import random
 import time
 import json
 from abc import ABC, abstractmethod
@@ -437,12 +438,8 @@ class DBAPIWriter(AbstractContextManager, ABC):
             self._write_buffer.append(output)
         else:
             self._write_buffer.append(output)
-            with closing(self.connection.cursor()) as cursor:
-                params = [(o.url, o.source, o.title, o.published,
-                           o.body, o.summary, o.summary_type, o.category, o.html) for o in self._write_buffer]
-                cursor.executemany(self._insert_doc(), params)
-                self.connection.commit()
-                self._write_buffer.clear()
+            self.flush_buffer(self._write_buffer)
+
 
     @property
     def saved_pages(self):
@@ -460,6 +457,14 @@ class DBAPIWriter(AbstractContextManager, ABC):
 
     def write_index(self):
         pass
+
+    def flush_buffer(self, buffer):
+        with closing(self.connection.cursor()) as cursor:
+            params = [(o.url, o.source, o.title, o.published,
+                       o.body, o.summary, o.summary_type, o.category, o.html) for o in buffer]
+            cursor.executemany(self._insert_doc(), params)
+            self.connection.commit()
+            buffer.clear()
 
     def _insert_doc(self):
         return f"""BEGIN TRANSACTION;
@@ -480,6 +485,10 @@ class BigQueryWriter(DBAPIWriter):
         if not self._connection:
             raise AssertionError("Not in context")
         return self._connection
+
+    def _insert_doc(self):
+        return f"INSERT INTO {self.ds_name}.{self.table} SELECT GENERATE_UUID(), %s, %s, %s, %s, %s, %s, %s, %s, %s"
+
 
     def __enter__(self):
         self._connection = bqapi.Connection(client=self.client)

@@ -1,3 +1,4 @@
+import datetime
 import os
 from contextlib import closing
 
@@ -115,11 +116,9 @@ def upload_topic(model: BERTopic):
 
 def write_topics(client: bq.Client, model, sum_df):
     path = upload_topic(model)
-    model_stmt = """INSERT INTO Articles.TopicModel 
-    SELECT CASE WHEN MAX(id) IS NULL THEN 0 ELSE MAX(id) + 1 END, CURRENT_TIMESTAMP(), ?, False 
-    FROM Articles.TopicModel;"""
-    ins_stmt = """INSERT INTO Articles.TopicSummary SELECT ?, MAX(id), ? FROM Articles.TopicModel"""
-    id_stmt = """SELECT MAX(id) FROM Articles.TopicModel"""
+    current_time = datetime.datetime.now()
+    model_stmt = """INSERT INTO Articles.TopicModel SELECT GENERATE_UUID(), ?, ?, False FROM Articles.TopicModel;"""
+    ins_stmt = """INSERT INTO Articles.TopicSummary SELECT ?, id, ? FROM Articles.TopicModel WHERE fit_date = ?"""
     client = bq.Client(project=client.project)
 
     with BigquerySession(client) as session:
@@ -127,6 +126,7 @@ def write_topics(client: bq.Client, model, sum_df):
         job = client.query(model_stmt, bq.QueryJobConfig(
             create_session=False,
             query_parameters=[
+                bq.ScalarQueryParameter(None, "TIMESTAMP", current_time),
                 bq.ScalarQueryParameter(None, "STRING", path)
             ],
             connection_properties=[
@@ -141,7 +141,8 @@ def write_topics(client: bq.Client, model, sum_df):
                 create_session=False,
                 query_parameters=[
                     bq.ScalarQueryParameter(None, "INTEGER", row["topic"]),
-                    bq.ScalarQueryParameter(None, "STRING", row["summary"])
+                    bq.ScalarQueryParameter(None, "STRING", row["summary"]),
+                    bq.ScalarQueryParameter(None, "TIMESTAMP", current_time)
                 ],
                 connection_properties=[
                     bq.query.ConnectionProperty(
@@ -155,7 +156,8 @@ def write_topics(client: bq.Client, model, sum_df):
 
 def load_topic_model(client):
     query = "SELECT id, fit_date, path FROM Articles.TopicModel AS TM " \
-            f"WHERE TM.fit_date >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_TTL_DAY} DAY) ORDER BY fit_date DESC LIMIT 1"
+            f"WHERE TM.fit_date >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_TTL_DAY} DAY) " \
+            f"ORDER BY fit_date DESC LIMIT 1"
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
             cursor.execute(query)
@@ -216,7 +218,7 @@ def write_article_topics(articles, model_id, batch_size=100, jobs=8):
 
 
 if __name__ == "__main__":
-    with closing(bq.Client(project=config.GCP_PROJECT, credentials=None)) as client:
+    with closing(bq.Client(project=config.GCP_PROJECT)) as client:
         mid, articles = categorize_articles(client)
         gc.collect()
         write_article_topics(articles, mid)

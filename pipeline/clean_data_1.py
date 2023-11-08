@@ -13,6 +13,8 @@ from allennlp.predictors.predictor import Predictor
 from joblib import delayed, Parallel
 from tqdm import tqdm
 
+from pipeline.common import BigquerySession
+
 
 def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
@@ -20,7 +22,7 @@ def get_scraped_articles(client: bq.Client):
             f"WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.ARTICLE_INGEST_MAX_DAYS} DAY)"
     cleaned_query = "SELECT CA.id FROM Articles.CleanedArticles AS CA " \
                     "WHERE CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), " \
-                    f"INTERVAL {config.ARTICLE_INGEST_MAX_DAYS + 1} DAY)"
+                    f"INTERVAL {config.ARTICLE_INGEST_MAX_DAYS + 5} DAY)"
     results = []
     existing = set()
 
@@ -39,7 +41,7 @@ def get_scraped_articles(client: bq.Client):
 
 def write_batch(project, batch):
     stmt = """INSERT INTO Articles.CleanedArticles VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-    client = bq.Client(project=project, credentials=None)
+    client = bq.Client(project=project)
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
             cursor.executemany(stmt, batch)
@@ -67,8 +69,11 @@ if __name__ == "__main__":
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
 
     src_df, ids = get_scraped_articles(client)
+    print(f"Total Articles: {src_df.shape[0]}")
     cleaned_df = execute_deduplication(src_df).copy()
     cleaned_df["exists"] = cleaned_df.id.apply(lambda idx: idx in ids)
+    print(f"De-dup Articles: {cleaned_df.shape[0]}")
     cleaned_df = cleaned_df.loc[~cleaned_df.exists]
+    print(f"Final Articles: {cleaned_df.shape[0]}")
     coref_df = add_coreference_resolution(cleaned_df, predictor=predictor, nlp=nlp)
     write_coref_articles(config.GCP_PROJECT, coref_df, batch=100)
