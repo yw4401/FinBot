@@ -19,8 +19,8 @@ ARTICLE_COREF_SPACY_MOD = "en_core_web_sm"
 
 # Topic Extraction
 TOPIC_BUCKET = "topic-models-null"
-TOPIC_TTL_DAY = 7
-TOPIC_FIT_RANGE_DAY = ((30 + 31) / 2) * 6
+TOPIC_TTL_DAY = 5
+TOPIC_FIT_RANGE_DAY = int(((30 + 31) / 2) * 6)
 TOPIC_EMBEDDING = "all-MiniLM-L6-v2"
 TOPIC_UMAP_NEIGHBORS = 15
 TOPIC_UMAP_COMPONENTS = 5
@@ -248,3 +248,6 @@ SUMMARY_SUMMARY_SYSTEM = "You are a helpful AI assistant that will rewrite the g
                          "Response:\n" \
                          "Anthropic’s AI chatbot Claude is posting lyrics to popular songs, lawsuit claims"
 SUMMARY_SUMMARY_USER = "{summary}"
+
+# Impossible Case
+SUMMARY_IMPOSSIBLE_RESP = "Impossible to answer with given information"

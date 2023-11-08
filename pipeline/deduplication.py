@@ -246,7 +246,8 @@ def execute_deduplication(src_df: pd.DataFrame):
 
     # Remove duplicates from the graph and get the list of removed nodes
     component_map, components = get_duplicate_nodes(lsh_similar_itemset)
-    src_df["component"] = src_df.doc_id.apply(lambda idx: get_component(component_map, [components], idx))
+    max_comp = [components]
+    src_df["component"] = src_df.doc_id.apply(lambda idx: get_component(component_map, max_comp, idx))
     num_unique = len(src_df.component.unique())
     print("Number of duplicates: ", src_df.shape[0] - num_unique)
 

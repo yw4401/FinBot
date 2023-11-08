@@ -265,23 +265,26 @@ def get_data_sets_df(sample_df, test_instances=1000):
     sample_df["summary"] = sample_df.summary.str.strip()
 
     body = []
+    published = []
     summary = []
     question = []
     pos = []
     for i, row in sample_df.iterrows():
         body.extend([row["body"], row["body"]])
-        summary.extend([row["summary"], "Impossible to answer with given information"])
+        published.extend([row["published"], row["published"]])
+        summary.extend([row["summary"], config.SUMMARY_IMPOSSIBLE_RESP])
         question.extend([row["question"], row["reverse_question"]])
         pos.extend([True, False])
     result_df = pd.DataFrame({
         "body": body,
+        "published": published,
         "question": question,
         "summary": summary,
         "pos": pos
     })
 
     train_df, test_df = train_test_split(result_df, test_size=test_instances, stratify=result_df.pos)
-    return train_df[["body", "question", "summary"]], test_df[["body", "question", "summary"]]
+    return train_df[["body", "published", "question", "summary"]], test_df[["body", "published", "question", "summary"]]
 
 
 def get_full_data(client: bq.Client):
@@ -294,27 +297,70 @@ def get_full_data(client: bq.Client):
     return pd.DataFrame(results, columns=["id", "published", "title", "body", "summary_type", "summary"])
 
 
-def inject_noise(df, splitter, target_chunks=7):
+def create_body_chunks(row, chunks):
+    published_date: datetime.datetime = row["published"]
+    body_chunks = [f"Published: {published_date.strftime('%Y-%m-%d')}\n{c}" for c in chunks]
+    return body_chunks
+
+
+def get_random_chunks(body_chunks, amount, idx):
+    result = []
+    for _ in range(amount):
+        alt_idx = np.random.choice(len(body_chunks))
+        while alt_idx == idx:
+            alt_idx = np.random.choice(len(body_chunks))
+
+        alternative_article = body_chunks[alt_idx]
+        alt_choice = np.random.choice(alternative_article)
+        result.append(alt_choice)
+    return result
+
+
+def inject_noise(df: pd.DataFrame, splitter, target_chunks=7, pure_noise=0.1):
     df = df.reset_index(drop=True)
     chunks = df.body.progress_apply(splitter.split_text)
     chunks: List[List[str]] = [[c.strip() for c in chunk] for chunk in chunks]
-    new_bodies = []
-    for i, row in df.iterrows():
-        published_date: datetime.datetime = row["published"]
-        body_chunks = [f"Published: {published_date.strftime('%Y-%m-%d')}\n{c}" for c in chunks[i]]
-        body_chunks = body_chunks[:min(target_chunks, len(body_chunks))]
-        for _ in range(target_chunks - len(body_chunks)):
-            alt_idx = np.random.choice(df.index)
-            alternative_article = chunks[alt_idx]
-            alt_date = df["published"].loc[alt_idx].strftime('%Y-%m-%d')
-            alt_choice = np.random.choice(alternative_article)
-            alt_text = f"Published: {alt_date}\n{alt_choice}"
-            body_chunks.append(alt_text)
-        np.random.shuffle(body_chunks)
-        new_bodies.append("\n\n".join(body_chunks))
-    df = df.copy()
-    df["body"] = new_bodies
-    return df
+    all_body_chunks = []
+    for idx, row in df.iterrows():
+        body_chunks = create_body_chunks(row, chunks[idx])
+        all_body_chunks.append(body_chunks)
+
+    # Original articles but with shuffled chunks
+    og_df = df.copy()
+    og_bodies = []
+    for b in all_body_chunks:
+        shuffled = list(b)[:target_chunks]
+        np.random.shuffle(shuffled)
+        og_bodies.append("\n\n".join(shuffled))
+    og_df["body"] = og_bodies
+
+    # Original articles + random other articles
+    augmented_bodies = []
+    aug_df = df.copy()
+    for idx, row in aug_df.iterrows():
+        num_chunks = len(all_body_chunks[idx])
+        num_noise = target_chunks - num_chunks
+        if num_noise <= 0:
+            augmented_bodies.append("")
+        else:
+            noise_chunks = get_random_chunks(all_body_chunks, num_noise, idx)
+            final_chunks = all_body_chunks[idx] + noise_chunks
+            np.random.shuffle(final_chunks)
+            augmented_bodies.append("\n\n".join(final_chunks))
+    aug_df["body"] = augmented_bodies
+    aug_df = aug_df.loc[aug_df.body != ""]
+
+    # Pure Noise Chunks
+    noise_df = df.sample(frac=pure_noise)
+    noise_df["summary"] = config.SUMMARY_IMPOSSIBLE_RESP
+    noise_bodies = []
+    for idx, row in noise_df.iterrows():
+        chunk_amt = np.random.randint(1, target_chunks + 1)
+        rand_chunks = get_random_chunks(all_body_chunks, chunk_amt, idx)
+        noise_bodies.append("\n\n".join(rand_chunks))
+    noise_df["body"] = noise_bodies
+
+    return pd.concat([og_df, aug_df, noise_df], ignore_index=True)
 
 
 def fix_summary_tagline(df):
