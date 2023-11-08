@@ -163,7 +163,7 @@ class lsh:
         return similar_docs  # return all the similar signatures that respect the threshold
 
 
-def remove_duplicate_nodes(lsh_similar_itemset):
+def get_duplicate_nodes(lsh_similar_itemset):
     # Create the graph (as in the previous example)
     G = nx.Graph()
 
@@ -173,24 +173,25 @@ def remove_duplicate_nodes(lsh_similar_itemset):
                 G.add_node(document)
         G.add_edge(pair[0], pair[1])
 
-    nodes_to_remove = []
-    visited = set()
+    components = 0
+    components_map = {}
 
     for node in G.nodes():
-        if node not in visited:
+        if node not in components_map:
             connected_component = list(nx.node_connected_component(G, node))
-            if len(connected_component) > 1:
-                nodes_to_remove.extend(connected_component[1:])
-            visited.update(connected_component)
+            if not connected_component or len(connected_component) == 0:
+                connected_component = [node]
+            for n in connected_component:
+                components_map[n] = components
+            components = components + 1
 
-    G.remove_nodes_from(nodes_to_remove)
-
-    return nodes_to_remove
+    return components_map, components
 
 
-def execute_deduplication(src_df):
+def execute_deduplication(src_df: pd.DataFrame):
     # Remove duplicates based on columns: source, category, title and body
-    src_df = src_df.drop_duplicates(subset=['source', 'category', 'title', 'body']).copy()
+    src_df = src_df.sort_values(by="exists", ascending=False)
+    src_df = src_df.drop_duplicates(subset=['body'], keep="first").copy()
     src_df.reset_index(drop=True, inplace=True)
 
     src_df['doc_id'] = src_df.index
@@ -237,11 +238,19 @@ def execute_deduplication(src_df):
     print("LSH Similarity computed in:\t %.2f seconds.\nSimilar Elements Found: %d" % (
     lsh_computation_time, len(lsh_similar_itemset)))
 
+    def get_component(component_map, max_component, node):
+        if node not in component_map:
+            component_map[node] = max_component[0]
+            max_component[0] += 1
+        return component_map[node]
+
     # Remove duplicates from the graph and get the list of removed nodes
-    removed_nodes = remove_duplicate_nodes(lsh_similar_itemset)
+    component_map, components = get_duplicate_nodes(lsh_similar_itemset)
+    src_df["component"] = src_df.doc_id.apply(lambda idx: get_component(component_map, [components], idx))
+    num_unique = len(src_df.component.unique())
+    print("Number of duplicates: ", src_df.shape[0] - num_unique)
 
-    print("Number of duplicates: ", len(removed_nodes))
-
-    src_df = src_df[~src_df['doc_id'].isin(removed_nodes)]
+    src_df = src_df.sort_values(by="exists", ascending=False)
+    src_df = src_df.drop_duplicates(subset=['component'], keep="first")
 
     return src_df

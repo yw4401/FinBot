@@ -13,8 +13,6 @@ from allennlp.predictors.predictor import Predictor
 from joblib import delayed, Parallel
 from tqdm import tqdm
 
-from pipeline.common import BigquerySession
-
 
 def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
@@ -34,9 +32,11 @@ def get_scraped_articles(client: bq.Client):
             cursor.execute(cleaned_query)
             for r in cursor.fetchall():
                 existing.add(r.id)
-    return pd.DataFrame(results,
-                        columns=["id", "url", "source", "title", "published", "body", "summary", "summary_type",
-                                 "category"]), existing
+    temp_result = pd.DataFrame(results,
+                               columns=["id", "url", "source", "title", "published", "body", "summary", "summary_type",
+                                        "category"])
+    temp_result["exists"] = temp_result.id.apply(lambda i: i in existing)
+    return temp_result
 
 
 def write_batch(project, batch):
@@ -68,10 +68,9 @@ if __name__ == "__main__":
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
 
-    src_df, ids = get_scraped_articles(client)
+    src_df = get_scraped_articles(client)
     print(f"Total Articles: {src_df.shape[0]}")
     cleaned_df = execute_deduplication(src_df).copy()
-    cleaned_df["exists"] = cleaned_df.id.apply(lambda idx: idx in ids)
     print(f"De-dup Articles: {cleaned_df.shape[0]}")
     cleaned_df = cleaned_df.loc[~cleaned_df.exists]
     print(f"Final Articles: {cleaned_df.shape[0]}")
