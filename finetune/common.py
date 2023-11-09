@@ -576,7 +576,7 @@ def create_summarization_metrics(tokenizer):
         predictions, labels = eval_pred
 
         # Replace -100 in the labels as we can't decode them.
-        predictions = np.where(labels != -100, predictions, tokenizer.bos_token_id)
+        predictions = np.where(predictions != -100, predictions, tokenizer.bos_token_id)
         labels = np.where(labels != -100, labels, tokenizer.bos_token_id)
 
         decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
