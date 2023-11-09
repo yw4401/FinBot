@@ -183,6 +183,7 @@ def create_summarization_metrics(tokenizer):
         result = {}
         result.update(compute_rouge_metrics(rouge_labels, rouge_preds))
         result.update(compute_classification_scores(classify_labels, classify_pred))
+        print(result)
         return result
 
     return compute_metrics, compute_rouge_metrics, compute_classification_scores

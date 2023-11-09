@@ -101,11 +101,11 @@ def main():
     print(raw_datasets["train"])
     # creating trainer with collator
     collator = DataCollatorForCompletionOnlyLM(script_args.start_text, tokenizer=tokenizer)
-
+    compute_metrics, _, _ = create_summarization_metrics(tokenizer)
     trainer = SFTTrainer(
         model=model, args=train_args, train_dataset=raw_datasets["train"], eval_dataset=raw_datasets["valid"],
         formatting_func=lambda x: format_summary_example(x, tokenizer),
-        compute_metrics=create_summarization_metrics(tokenizer)[0],
+        compute_metrics=compute_metrics,
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
