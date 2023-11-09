@@ -9,13 +9,14 @@ from peft import LoraConfig
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    TrainingArguments,
+    Seq2SeqTrainingArguments,
     HfArgumentParser, )
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from trl import DataCollatorForCompletionOnlyLM
 from sklearn.model_selection import train_test_split
 
 import config
-from common import format_summary_example, truncate_summary_example_chat, create_summarization_metrics
+from common import format_summary_example, truncate_summary_example_chat, create_summarization_metrics, \
+    Seq2SeqSFTTrainer
 
 
 @dataclass
@@ -36,9 +37,9 @@ class ScriptArguments:
 
 
 def main():
-    parser = HfArgumentParser([TrainingArguments, ScriptArguments])
+    parser = HfArgumentParser([Seq2SeqTrainingArguments, ScriptArguments])
     train_args, script_args = parser.parse_args_into_dataclasses()
-    train_args: TrainingArguments = cast(TrainingArguments, train_args)
+    train_args: Seq2SeqTrainingArguments = cast(Seq2SeqTrainingArguments, train_args)
     script_args: ScriptArguments = cast(ScriptArguments, script_args)
     script_args.lora_target = script_args.lora_target.split(",")
 
@@ -102,7 +103,7 @@ def main():
     # creating trainer with collator
     collator = DataCollatorForCompletionOnlyLM(script_args.start_text, tokenizer=tokenizer)
     compute_metrics, _, _ = create_summarization_metrics(tokenizer)
-    trainer = SFTTrainer(
+    trainer = Seq2SeqSFTTrainer(
         model=model, args=train_args, train_dataset=raw_datasets["train"], eval_dataset=raw_datasets["valid"],
         formatting_func=lambda x: format_summary_example(x, tokenizer),
         compute_metrics=compute_metrics,
