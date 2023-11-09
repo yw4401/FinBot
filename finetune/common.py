@@ -588,6 +588,7 @@ def create_summarization_metrics(tokenizer):
 
         for l, p in zip(decoded_labels, decoded_preds):
             print(f"Label Length {len(l)}, Predicted Length {len(l)}")
+            print(f"Label: {l} vs Pred: {p}")
             label_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in l.lower().strip()
             predict_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in p.lower().strip()
 
