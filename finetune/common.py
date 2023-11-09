@@ -556,7 +556,7 @@ def create_summarization_metrics(tokenizer):
 
         # Note that other metrics may not have a `use_aggregator` parameter
         # and thus will return a list, computing a metric for each sentence.
-        result = metric.compute(predictions=decoded_preds, references=decoded_labels, use_stemmer=True,
+        result = metric.compute(predictions=decoded_preds, references=decoded_labels, use_stemmer=False,
                                 use_aggregator=True)
         # Extract a few results
         result = {key: value * 100 for key, value in result.items()}
@@ -598,6 +598,7 @@ def create_summarization_metrics(tokenizer):
             classify_pred.append(predict_impossible)
 
         result = {}
+        print(f"Rouge Pred Length: {len(rouge_preds)}, Rouge Label Length: {len(rouge_labels)}")
         result.update(compute_rouge_metrics(rouge_labels, rouge_preds))
         result.update(compute_classification_scores(classify_labels, classify_pred))
         print(result)
