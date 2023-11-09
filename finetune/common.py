@@ -3,6 +3,12 @@ from transformers import (
     LlamaTokenizer, StoppingCriteria, )
 
 import config
+from evaluate import load
+import numpy as np
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
+from sklearn.metrics import precision_recall_fscore_support
 
 
 class ListDataset(torch.utils.data.Dataset):
@@ -115,3 +121,68 @@ class StoppingCriteriaSub(StoppingCriteria):
                 return True
 
         return False
+
+
+def create_summarization_metrics(tokenizer):
+    metric = load("rouge")
+    nltk.download("punkt")
+    nltk.download('wordnet')
+    nltk.download('stopwords')
+    lemmatizer = WordNetLemmatizer()
+    stop_words = set([w.lower() for w in stopwords.words("english")])
+
+    def clean_sentence(sentence):
+        nltk_words = nltk.word_tokenize(sentence)
+        lem_words = [lemmatizer.lemmatize(w) for w in nltk_words if w not in stop_words]
+        return " ".join(lem_words)
+
+    def compute_rouge_metrics(labels, predicted):
+        # Rouge expects a newline after each sentence
+        decoded_preds = ["\n".join(clean_sentence(nltk.sent_tokenize(pred))) for pred in labels]
+        decoded_labels = ["\n".join(clean_sentence(nltk.sent_tokenize(label))) for label in predicted]
+
+        # Note that other metrics may not have a `use_aggregator` parameter
+        # and thus will return a list, computing a metric for each sentence.
+        result = metric.compute(predictions=decoded_preds, references=decoded_labels, use_stemmer=True,
+                                use_aggregator=True)
+        # Extract a few results
+        result = {key: value * 100 for key, value in result.items()}
+
+        return {k: round(v, 4) for k, v in result.items()}
+
+    def compute_classification_scores(labels, predicted):
+        precision, recall, f1, _ = precision_recall_fscore_support(labels, predicted, pos_label=True, average="binary")
+        result = {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1
+        }
+        return {k: round(v, 4) for k, v in result.items()}
+
+    def compute_metrics(eval_pred):
+        predictions, labels = eval_pred
+        decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        # Replace -100 in the labels as we can't decode them.
+        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        rouge_labels = []
+        rouge_preds = []
+        classify_labels = []
+        classify_pred = []
+
+        for l, p in zip(decoded_labels, decoded_preds):
+            label_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in l.lower().strip()
+            predict_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in p.lower().strip()
+
+            if not label_impossible and not predict_impossible:
+                rouge_labels.append(l.lower().strip())
+                rouge_preds.append(l.lower().strip())
+            classify_labels.append(label_impossible)
+            classify_pred.append(predict_impossible)
+
+        result = {}
+        result.update(compute_rouge_metrics(rouge_labels, rouge_preds))
+        result.update(compute_classification_scores(classify_labels, classify_pred))
+        return result
+
+    return compute_metrics, compute_rouge_metrics, compute_classification_scores

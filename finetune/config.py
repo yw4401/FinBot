@@ -29,16 +29,17 @@ FIQA_MODEL = "gpt-3.5-turbo-16k"
 FIQA_TEMPERATURE = 0
 
 # Finetuning Parameters
+IMPOSSIBLE_INSTRUCTION = "Impossible to answer with given information"
 LLAMA_SUMMARY_BULLET_INSTRUCTION = "Summarize the key-points from the given context. " \
                                    "The information in the summary should include, " \
                                    "but should not be limited to information that can help answer the given question. " \
                                    "Be concise if possible. " \
-                                   'Respond with "Impossible to answer with given information" if the context does not contain information that can answer the given question.'
+                                   f'Respond with "{IMPOSSIBLE_INSTRUCTION}" if the context does not contain information that can answer the given question.'
 LLAMA_SUMMARY_PARA_INSTRUCTION = "Summarize the given context. " \
                                  "The information in the summary should include, " \
                                  "but should not be limited to information that can help answer the given question. " \
                                  "Be concise if possible." \
-                                 'Respond with "Impossible to answer with given information" if the context does not contain information that can answer the given question.'
+                                 f'Respond with "{IMPOSSIBLE_INSTRUCTION}" if the context does not contain information that can answer the given question.'
 LLAMA_QA_SYSTEM_INSTRUCTION = "TODO"
 LLAMA_USER_SUMMARY_TEMPLATE = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"
 LLAMA_USER_QA_TEMPLATE = "TODO"

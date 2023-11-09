@@ -10,22 +10,23 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
-    AutoConfig,
     HfArgumentParser, )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from sklearn.model_selection import train_test_split
 
 import config
-from common import format_summary_example, truncate_summary_example_chat
+from common import format_summary_example, truncate_summary_example_chat, create_summarization_metrics
 
 
 @dataclass
 class ScriptArguments:
-    model_path: Optional[str] = field(default="meta-llama/Llama-2-7b-chat-hf")
+    model_path: Optional[str] = field(default="Open-Orca/Mistral-7B-OpenOrca")
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
     sample: Optional[int] = field(default=50000)
+    validation: Optional[int] = field(default=2500)
     model_max_length: Optional[int] = field(default=4096)
-    lora_target: Optional[str] = field(default="q_proj,v_proj")
+    lora_target: Optional[str] = field(default="q_proj,k_proj,v_proj,o_proj")
     lora_r: Optional[int] = field(default=16)
     lora_alpha: Optional[int] = field(default=16)
     lora_dropout: Optional[float] = field(default=0.05)
@@ -52,10 +53,10 @@ def main():
     tokenizer.pad_token = "[PAD]"
 
     # loading and prepare dataset
-    train_df = pd.read_parquet(script_args.dataset_path)
-    if train_df.shape[0] > script_args.sample:
-        train_df = train_df.sample(n=script_args.sample, random_state=93)
-    train_df["body"] = train_df.apply(
+    data_df = pd.read_parquet(script_args.dataset_path)
+    if data_df.shape[0] > script_args.sample:
+        data_df = data_df.sample(n=script_args.sample, random_state=93)
+    data_df["body"] = data_df.apply(
         lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
                                                   question=row["question"],
                                                   body=row["body"],
@@ -63,11 +64,14 @@ def main():
                                                   tokenizer=tokenizer,
                                                   max_context=script_args.model_max_length,
                                                   buffer=script_args.buffer_len), axis=1)
-    print(train_df.head())
-    print(train_df.summary.iloc[0])
+    print(data_df.head())
+    print(data_df.summary.iloc[0])
+    train_df, valid_df = train_test_split(data_df, test_size=script_args.validation)
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
+    valid_data = Dataset.from_pandas(valid_df[["body", "question", "summary"]])
     raw_datasets = DatasetDict({
-        "train": train_data
+        "train": train_data,
+        "valid": valid_data
     })
 
     # preparing lora configuration
@@ -99,8 +103,9 @@ def main():
     collator = DataCollatorForCompletionOnlyLM(script_args.start_text, tokenizer=tokenizer)
 
     trainer = SFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"],
+        model=model, args=train_args, train_dataset=raw_datasets["train"], eval_dataset=raw_datasets["valid"],
         formatting_func=lambda x: format_summary_example(x, tokenizer),
+        compute_metrics=create_summarization_metrics(tokenizer),
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
