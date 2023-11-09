@@ -133,7 +133,7 @@ def create_es_topic_doc(encoder: SentenceTransformer, row):
         "description_embedding": embedding.tolist(),
         "metadata": {
             "topic": int(row["topic"]),
-            "model": int(row["model"]),
+            "model": row["model"],
             "recency": row["recency"],
         }
     }
@@ -184,7 +184,7 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
                 "entities": " ".join(row["entities"][i]),
                 "published_at": published,
                 "topic": int(row["topic"]),
-                "model": int(row["model"])
+                "model": row["model"]
             }
         }
 
@@ -215,7 +215,7 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
 
 def get_unindexed_topics(client: bq.Client):
     """
-    Gets the articles that have been pre-processed, but not been run through the topic model yet.
+    Gets the latest topics
     """
 
     query = "SELECT TS.model, TS.topic, TDT.recency, TS.summary FROM " \
@@ -225,7 +225,8 @@ def get_unindexed_topics(client: bq.Client):
             f"WHERE TAT.article_id = CA.id AND TAT.topic_prob >= {config.TOPIC_EMBED_TOP_THRESHOLD} " \
             f"GROUP BY TAT.model, TAT.topic) AS TDT, " \
             f"Articles.TopicSummary AS TS, " \
-            f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM GROUP BY TM.id) AS NM " \
+            f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM " \
+            f"WHERE NOT TM.servable GROUP BY TM.id) AS NM " \
             f"WHERE NM.id = TDT.model AND TDT.model = TS.model AND TDT.topic = TS.topic ORDER BY TS.topic ASC"
     result = []
     with closing(bqapi.Connection(client=client)) as connection:
@@ -249,12 +250,23 @@ def get_articles_by_topics(client: bq.Client, model):
     result = []
     with closing(bqapi.Connection(client=client)) as connection:
         with closing(connection.cursor()) as cursor:
-            cursor.execute(query, (int(model),))
+            cursor.execute(query, (model,))
             for r in cursor.fetchall():
                 result.append(list(r))
     result_df = pd.DataFrame(result, columns=["id", "url", "published", "source", "title", "body", "topic"])
     result_df["model"] = model
     return result_df
+
+
+def flip_servable(client: bq.Client, model):
+    """
+    Sets a topic model to be servable
+    """
+    query = "UPDATE Articles.TopicModel AS TM SET servable=TRUE WHERE TM.id=%s"
+    with closing(bqapi.Connection(client=client)) as connection:
+        with closing(connection.cursor()) as cursor:
+            cursor.execute(query, (model,))
+            connection.commit()
 
 
 if __name__ == "__main__":
@@ -268,8 +280,10 @@ if __name__ == "__main__":
 
     with closing(bq.Client(project=config.GCP_PROJECT)) as client:
         topic_df = get_unindexed_topics(client=client)
-        article_df = get_articles_by_topics(client=client, model=topic_df.model.iloc[0])
         print("Building Topic Indices")
         create_es_topic_idx(client=elastic_client, encoder=encoder, topic_sum_df=topic_df)
-        print("Building Article Indices")
-        create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df)
+        for m in topic_df.model.unique():
+            article_df = get_articles_by_topics(client=client, model=m)
+            print(f"Building Article Indices for {m}")
+            create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df)
+            flip_servable(client, m)
