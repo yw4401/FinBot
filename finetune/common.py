@@ -102,16 +102,43 @@ def format_llama_example(example, system, user_func, resp_func, tokenizer, templ
         ], tokenize=False, chat_template=template)
         if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
             text = text[len(tokenizer.bos_token):]
-        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
-            text = text[:-len(tokenizer.eos_token)]
+        if text[-len(tokenizer.eos_token):] != tokenizer.eos_token:
+            text = text + tokenizer.eos_token
         output_texts.append(text)
 
     return output_texts
 
 
+def format_llama_eval_example(example, system, user_func, resp_func, tokenizer, template=None):
+    output_texts = []
+    resp_texts = []
+    for i in range(len(example['body'])):
+        s = resp_func(get_batch_row(example, i))
+        user = user_func(get_batch_row(example, i))
+
+        text = tokenizer.apply_chat_template([
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+            {"role": "assistant", "content": ""}
+        ], tokenize=False, chat_template=template)
+        if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+            text = text[len(tokenizer.bos_token):]
+        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+            text = text[:-len(tokenizer.eos_token)]
+        output_texts.append(text)
+        resp_texts.append(s)
+
+    return output_texts, resp_texts
+
+
 def format_summary_example(example, tokenizer, template=None):
     return format_llama_example(example, config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
                                 format_llama_sum_user, format_llama_sum_resp, tokenizer, template)
+
+
+def format_summary_eval(example, tokenizer, template=None):
+    return format_llama_eval_example(example, config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
+                                     format_llama_sum_user, format_llama_sum_resp, tokenizer, template)
 
 
 def format_qa_example(example, tokenizer, template=None):
@@ -224,11 +251,10 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
             The function to use to preprocess the logits before computing the metrics.
         peft_config (`Optional[PeftConfig]`):
             The PeftConfig object to use to initialize the PeftModel.
-        dataset_text_field (`Optional[str]`):
-            The name of the text field of the dataset, in case this is passed by a user, the trainer will automatically create a
-            `ConstantLengthDataset` based on the `dataset_text_field` argument.
-        formatting_func (`Optional[Callable]`):
+        input_format_func (`Optional[Callable]`):
             The formatting function to be used for creating the `ConstantLengthDataset`.
+        eval_format_func (`Optional[Callable]`):
+            The formatting function to be used for creating the eval dataset. It needs to return a pair of list of strings, with the first list being the input, and the second list being the output.
         max_seq_length (`Optional[int]`):
             The maximum sequence length to use for the `ConstantLengthDataset` and for automaticallty creating the Dataset. Defaults to `512`.
         infinite (`Optional[bool]`):
@@ -267,9 +293,9 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
             optimizers: Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LambdaLR] = (None, None),
             preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
             peft_config: Optional["PeftConfig"] = None,
-            dataset_text_field: Optional[str] = None,
+            input_format_func: Callable = None,
+            eval_format_func: Callable = None,
             packing: Optional[bool] = False,
-            formatting_func: Optional[Callable] = None,
             max_seq_length: Optional[int] = None,
             infinite: Optional[bool] = False,
             num_of_sequences: Optional[int] = 1024,
@@ -353,9 +379,9 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
             self.neftune_noise_alpha = neftune_noise_alpha
 
         if not packing:
-            if dataset_text_field is None and formatting_func is None:
+            if input_format_func is None:
                 raise ValueError(
-                    "You passed `packing=False` to the SFTTrainer, but you didn't pass a `dataset_text_field` or `formatting_func` argument."
+                    "You passed `packing=False` to the Seq2SeqSFTTrainer, but you didn't pass a `input_format_func` argument."
                 )
 
             if data_collator is None:
@@ -366,24 +392,19 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                 train_dataset,
                 tokenizer,
                 packing,
-                dataset_text_field,
                 max_seq_length,
-                formatting_func,
+                input_format_func,
                 infinite,
                 num_of_sequences,
                 chars_per_token,
             )
         if eval_dataset is not None:
-            eval_dataset = self._prepare_dataset(
+            eval_dataset = self._prepare_eval_dataset(
                 eval_dataset,
                 tokenizer,
-                packing,
-                dataset_text_field,
                 max_seq_length,
-                formatting_func,
-                infinite,
-                num_of_sequences,
-                chars_per_token,
+                args.generation_max_length,
+                eval_format_func
             )
 
         if tokenizer.padding_side is not None and tokenizer.padding_side != "right":
@@ -441,7 +462,6 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
             dataset,
             tokenizer,
             packing,
-            dataset_text_field,
             max_seq_length,
             formatting_func,
             infinite,
@@ -457,19 +477,18 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
 
         if not packing:
             return self._prepare_non_packed_dataloader(
-                tokenizer, dataset, dataset_text_field, max_seq_length, formatting_func
+                tokenizer, dataset, max_seq_length, formatting_func
             )
 
-        if dataset_text_field is not None or formatting_func is not None:
+        if formatting_func is not None:
             if tokenizer is None:
                 raise ValueError(
-                    "You need to pass a tokenizer when using the SFT Trainer when passing a `dataset_text_field`."
+                    "You need to pass a tokenizer when using the SFT Trainer when passing a `input_format_func`."
                 )
 
             return ConstantLengthDataset(
                 tokenizer,
                 dataset,
-                dataset_text_field=dataset_text_field,
                 formatting_func=formatting_func,
                 seq_length=max_seq_length,
                 infinite=infinite,
@@ -479,19 +498,70 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
             )
 
         raise ValueError(
-            "You need to pass a `dataset_text_field` or `formatting_func` argument to the SFTTrainer if you want to use the `ConstantLengthDataset`."
+            "You need to pass a `input_format_func` argument to the SFTTrainer if you want to use the `ConstantLengthDataset`."
+        )
+
+    def _prepare_eval_dataset(self, dataset, tokenizer, max_seq_length, max_gen_seq_length, formatting_func):
+        if dataset is None:
+            raise ValueError("The dataset should not be None")
+        self._dataset_sanity_checked = False
+
+        # check if torch dataset / dataloader and do nothing
+        if isinstance(dataset, (torch.utils.data.IterableDataset, torch.utils.data.Dataset, ConstantLengthDataset)):
+            return dataset
+
+        if formatting_func is not None:
+            if tokenizer is None:
+                raise ValueError(
+                    "You need to pass a tokenizer when using the SFT Trainer when passing a `input_format_func`."
+                )
+
+            def tokenize(examples):
+                inputs, labels = formatting_func(examples)
+
+                if not self._dataset_sanity_checked:
+                    if not isinstance(inputs, list) or not isinstance(labels, list):
+                        raise ValueError(
+                            "The `formatting_func` should return a list of processed strings since it can lead to silent bugs."
+                        )
+                    else:
+                        self._dataset_sanity_checked = True
+
+                input_tokenized = tokenizer(
+                    inputs,
+                    truncation=True,
+                    padding=False,
+                    max_length=max_seq_length,
+                    return_overflowing_tokens=False,
+                    return_length=False,
+                )
+                labels_tokenized = tokenizer(
+                    labels,
+                    truncation=True,
+                    padding=False,
+                    max_length=max_gen_seq_length,
+                    return_overflowing_tokens=False,
+                    return_length=False,
+                )
+                return {"input_ids": input_tokenized["input_ids"],
+                        "attention_mask": input_tokenized["attention_mask"], "labels": labels_tokenized["input_ids"]}
+
+            valid_data = dataset.map(lambda x: tokenize(x))
+            return valid_data
+
+        raise ValueError(
+            "You need to pass a `input_format_func` argument to the SFTTrainer if you do not process the dataset."
         )
 
     def _prepare_non_packed_dataloader(
-            self, tokenizer, dataset, dataset_text_field, max_seq_len, formatting_func=None
+            self, tokenizer, dataset, max_seq_len, formatting_func
     ):
-        use_formatting_func = formatting_func is not None and dataset_text_field is None
         self._dataset_sanity_checked = False
 
         # Inspired from: https://huggingface.co/learn/nlp-course/chapter7/6?fw=pt
         def tokenize(element):
             outputs = tokenizer(
-                element[dataset_text_field] if not use_formatting_func else formatting_func(element),
+                formatting_func(element),
                 truncation=True,
                 padding=False,
                 max_length=max_seq_len,
@@ -499,7 +569,7 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                 return_length=False,
             )
 
-            if use_formatting_func and not self._dataset_sanity_checked:
+            if not self._dataset_sanity_checked:
                 if not isinstance(formatting_func(element), list):
                     raise ValueError(
                         "The `formatting_func` should return a list of processed strings since it can lead to silent bugs."
@@ -587,7 +657,7 @@ def create_summarization_metrics(tokenizer):
         classify_pred = []
 
         for l, p in zip(decoded_labels, decoded_preds):
-            print(f"Label Length {len(l)}, Predicted Length {len(l)}")
+            print(f"Label Length {len(l)}, Predicted Length {len(p)}")
             print(f"Label: {l} vs Pred: {p}")
             label_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in l.lower().strip()
             predict_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in p.lower().strip()

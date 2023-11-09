@@ -15,8 +15,8 @@ from trl import DataCollatorForCompletionOnlyLM
 from sklearn.model_selection import train_test_split
 
 import config
-from common import format_summary_example, truncate_summary_example_chat, create_summarization_metrics, \
-    Seq2SeqSFTTrainer
+from common import format_summary_example, format_summary_eval, truncate_summary_example_chat, \
+    create_summarization_metrics, Seq2SeqSFTTrainer
 
 
 @dataclass
@@ -48,7 +48,6 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token,
                                               model_max_length=script_args.model_max_length,
-                                              add_eos_token=True,
                                               cache_dir=script_args.cache_dir,
                                               padding_side="right")
     tokenizer.pad_token = "[PAD]"
@@ -105,7 +104,8 @@ def main():
     compute_metrics, _, _ = create_summarization_metrics(tokenizer)
     trainer = Seq2SeqSFTTrainer(
         model=model, args=train_args, train_dataset=raw_datasets["train"], eval_dataset=raw_datasets["valid"],
-        formatting_func=lambda x: format_summary_example(x, tokenizer),
+        input_format_func=lambda x: format_summary_example(x, tokenizer),
+        eval_format_func=lambda x: format_summary_eval(x, tokenizer),
         compute_metrics=compute_metrics,
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
