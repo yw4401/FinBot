@@ -105,7 +105,7 @@ def main():
     trainer = SFTTrainer(
         model=model, args=train_args, train_dataset=raw_datasets["train"], eval_dataset=raw_datasets["valid"],
         formatting_func=lambda x: format_summary_example(x, tokenizer),
-        compute_metrics=create_summarization_metrics(tokenizer),
+        compute_metrics=create_summarization_metrics(tokenizer)[0],
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
