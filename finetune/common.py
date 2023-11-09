@@ -574,11 +574,12 @@ def create_summarization_metrics(tokenizer):
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
-        print(np.min(predictions))
-        print(np.max(predictions))
-        decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+
         # Replace -100 in the labels as we can't decode them.
+        predictions = np.where(labels != -100, predictions, tokenizer.pad_token_id)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+
+        decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
         rouge_labels = []
         rouge_preds = []
