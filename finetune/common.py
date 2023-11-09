@@ -576,8 +576,8 @@ def create_summarization_metrics(tokenizer):
         predictions, labels = eval_pred
 
         # Replace -100 in the labels as we can't decode them.
-        predictions = np.where(labels != -100, predictions, tokenizer.pad_token_id)
-        labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
+        predictions = np.where(labels != -100, predictions, tokenizer.bos_token_id)
+        labels = np.where(labels != -100, labels, tokenizer.bos_token_id)
 
         decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -587,6 +587,7 @@ def create_summarization_metrics(tokenizer):
         classify_pred = []
 
         for l, p in zip(decoded_labels, decoded_preds):
+            print(f"Label Length {len(l)}, Predicted Length {len(l)}")
             label_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in l.lower().strip()
             predict_impossible = config.IMPOSSIBLE_INSTRUCTION.lower() in p.lower().strip()
 
