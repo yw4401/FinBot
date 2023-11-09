@@ -12,6 +12,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
+import re
 
 import config
 
@@ -108,9 +109,10 @@ def preprocess_articles(article_df, splitter):
     """
 
     article_df = article_df.copy()
+    clean_newline_regex = re.compile(r"\n+")
     article_df["body"] = article_df.apply(
         lambda row: strip_reuter_intro(row["body"] if row["source"] == "reuters" else row["body"]), axis=1)
-    article_df["chunks"] = article_df.body.progress_apply(splitter.split_text)
+    article_df["chunks"] = article_df.body.progress_apply(lambda b: [clean_newline_regex.sub("\n", c).strip() for c in splitter.split_text(b)])
     ner_recog = spacy.load(config.NER_SPACY_MOD, enable=["ner"])
     extractor = create_extractor(ner_recog)
     article_df["entities"] = article_df.chunks.progress_apply(extractor)

@@ -318,8 +318,9 @@ def get_random_chunks(body_chunks, amount, idx):
 
 def inject_noise(df: pd.DataFrame, splitter, target_chunks=7, pure_noise=0.1):
     df = df.reset_index(drop=True)
+    clean_newline_regex = re.compile(r"\n+")
     chunks = df.body.progress_apply(splitter.split_text)
-    chunks: List[List[str]] = [[c.strip() for c in chunk] for chunk in chunks]
+    chunks: List[List[str]] = [[clean_newline_regex.sub("\n", c).strip() for c in chunk] for chunk in chunks]
     all_body_chunks = []
     for idx, row in df.iterrows():
         body_chunks = create_body_chunks(row, chunks[idx])
