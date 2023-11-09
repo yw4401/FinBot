@@ -35,6 +35,7 @@ from trl.trainer import (
     ConstantLengthDataset,
     DataCollatorForCompletionOnlyLM
 )
+from datasets import IterableDataset
 
 import config
 
@@ -541,12 +542,16 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                 return {"input_ids": input_tokenized["input_ids"],
                         "attention_mask": input_tokenized["attention_mask"], "labels": labels_tokenized["input_ids"]}
 
+            def iterate_over_data(dataset):
+                for i in dataset:
+                    yield i
+
+            dataset = IterableDataset.from_generator(iterate_over_data(dataset))
             valid_data = dataset.map(
                 tokenize,
                 batched=True,
                 remove_columns=dataset.column_names,
-                num_proc=self.dataset_num_proc,
-                batch_size=self.dataset_batch_size,
+                batch_size=self.dataset_batch_size
             )
             return valid_data
 
