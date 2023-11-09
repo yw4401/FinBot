@@ -110,6 +110,8 @@ def format_llama_example(example, system, user_func, resp_func, tokenizer, templ
 
 
 def format_llama_eval_example(example, system, user_func, resp_func, tokenizer, template=None):
+    print(example)
+    raise ValueError()
     output_texts = []
     resp_texts = []
     for i in range(len(example['body'])):
