@@ -110,27 +110,20 @@ def format_llama_example(example, system, user_func, resp_func, tokenizer, templ
 
 
 def format_llama_eval_example(example, system, user_func, resp_func, tokenizer, template=None):
-    print(example)
-    raise ValueError()
-    output_texts = []
-    resp_texts = []
-    for i in range(len(example['body'])):
-        s = resp_func(get_batch_row(example, i))
-        user = user_func(get_batch_row(example, i))
+    s = resp_func(example)
+    user = user_func(example)
 
-        text = tokenizer.apply_chat_template([
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-            {"role": "assistant", "content": ""}
-        ], tokenize=False, chat_template=template)
-        if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
-            text = text[len(tokenizer.bos_token):]
-        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
-            text = text[:-len(tokenizer.eos_token)]
-        output_texts.append(text)
-        resp_texts.append(s)
+    text = tokenizer.apply_chat_template([
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+        {"role": "assistant", "content": ""}
+    ], tokenize=False, chat_template=template)
+    if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+        text = text[len(tokenizer.bos_token):]
+    if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+        text = text[:-len(tokenizer.eos_token)]
 
-    return output_texts, resp_texts
+    return text, s
 
 
 def format_summary_example(example, tokenizer, template=None):
@@ -256,7 +249,7 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
         input_format_func (`Optional[Callable]`):
             The formatting function to be used for creating the `ConstantLengthDataset`.
         eval_format_func (`Optional[Callable]`):
-            The formatting function to be used for creating the eval dataset. It needs to return a pair of list of strings, with the first list being the input, and the second list being the output.
+            The formatting function to be used for creating the eval dataset. It needs to return a pair of string with the first being the input, and second the output
         max_seq_length (`Optional[int]`):
             The maximum sequence length to use for the `ConstantLengthDataset` and for automaticallty creating the Dataset. Defaults to `512`.
         infinite (`Optional[bool]`):
