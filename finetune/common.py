@@ -514,7 +514,6 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
 
             def tokenize(examples):
                 inputs, labels = formatting_func(examples)
-                print(inputs)
 
                 if not self._dataset_sanity_checked:
                     if not isinstance(inputs, str) or not isinstance(labels, str):
@@ -540,6 +539,7 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                     return_overflowing_tokens=False,
                     return_length=False,
                 )
+                print(input_tokenized)
                 return {"input_ids": input_tokenized["input_ids"],
                         "attention_mask": input_tokenized["attention_mask"], "labels": labels_tokenized["input_ids"]}
 
