@@ -118,17 +118,27 @@ def format_llama_eval_example(example, system, user_func, resp_func, tokenizer, 
         s = resp_func(example)
         user = user_func(example)
 
-        text = tokenizer.apply_chat_template([
+        input_text = tokenizer.apply_chat_template([
             {"role": "system", "content": system},
             {"role": "user", "content": user},
             {"role": "assistant", "content": ""}
         ], tokenize=False, chat_template=template)
-        if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
-            text = text[len(tokenizer.bos_token):]
-        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
-            text = text[:-len(tokenizer.eos_token)]
-        output_texts.append(text)
-        label_texts.append(s)
+        if input_text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+            input_text = input_text[len(tokenizer.bos_token):]
+        if input_text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+            input_text = input_text[:-len(tokenizer.eos_token)]
+
+        output_text = tokenizer.apply_chat_template([
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+            {"role": "assistant", "content": s}
+        ], tokenize=False, chat_template=template)
+        if output_text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+            output_text = output_text[len(tokenizer.bos_token):]
+        if output_text[-len(tokenizer.eos_token):] != tokenizer.eos_token:
+            output_text = output_text + tokenizer.eos_token
+        output_texts.append(input_text)
+        label_texts.append(output_text)
 
     return output_texts, label_texts
 
@@ -532,16 +542,16 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                 input_tokenized = tokenizer(
                     inputs,
                     truncation=True,
-                    padding=False,
+                    padding=True,
                     max_length=max_seq_length,
                     return_overflowing_tokens=False,
                     return_length=False,
                 )
                 labels_tokenized = tokenizer(
                     labels,
-                    truncation=True,
-                    padding=False,
-                    max_length=max_gen_seq_length,
+                    truncation=False,
+                    padding=True,
+                    max_length=max_seq_length,
                     return_overflowing_tokens=False,
                     return_length=False,
                 )
