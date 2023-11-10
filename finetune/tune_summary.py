@@ -9,13 +9,15 @@ from peft import LoraConfig
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    Seq2SeqTrainingArguments,
-    HfArgumentParser, )
+    TrainingArguments,
+    HfArgumentParser,
+    GenerationConfig
+)
 from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 from sklearn.model_selection import train_test_split
 
 import config
-from common import format_summary_example, format_summary_eval, truncate_summary_example_chat
+from common import format_summary_example, truncate_summary_example_chat, create_summarization_metrics
 
 
 @dataclass
@@ -23,9 +25,12 @@ class ScriptArguments:
     model_path: Optional[str] = field(default="Open-Orca/Mistral-7B-OpenOrca")
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-summary-train.parquet")
+    template_path: Optional[str] = field(default=None)
+    flash_attention: Optional[bool] = field(default=True)
+    use_meta: Optional[bool] = field(default=True)
     sample: Optional[int] = field(default=50000)
-    validation: Optional[int] = field(default=2500)
     model_max_length: Optional[int] = field(default=4096)
+    model_max_new_tokens: Optional[int] = field(default=256)
     lora_target: Optional[str] = field(default="q_proj,k_proj,v_proj,o_proj")
     lora_r: Optional[int] = field(default=16)
     lora_alpha: Optional[int] = field(default=16)
@@ -36,14 +41,20 @@ class ScriptArguments:
 
 
 def main():
-    parser = HfArgumentParser([Seq2SeqTrainingArguments, ScriptArguments])
+    parser = HfArgumentParser([TrainingArguments, ScriptArguments])
     train_args, script_args = parser.parse_args_into_dataclasses()
-    train_args: Seq2SeqTrainingArguments = cast(Seq2SeqTrainingArguments, train_args)
+    train_args: TrainingArguments = cast(TrainingArguments, train_args)
     script_args: ScriptArguments = cast(ScriptArguments, script_args)
     script_args.lora_target = script_args.lora_target.split(",")
 
     with open(script_args.token_path, "r") as fp:
         hf_token = fp.read().strip()
+
+    if script_args.template_path:
+        with open(script_args.template_path, "r") as fp:
+            template = fp.read()
+    else:
+        template = None
 
     tokenizer = AutoTokenizer.from_pretrained(script_args.model_path, token=hf_token,
                                               model_max_length=script_args.model_max_length,
@@ -61,17 +72,15 @@ def main():
                                                   body=row["body"],
                                                   summary=row["summary"],
                                                   tokenizer=tokenizer,
+                                                  template=template,
                                                   max_context=script_args.model_max_length,
                                                   buffer=script_args.buffer_len), axis=1)
     print(data_df.head())
     print(data_df.summary.iloc[0])
-    # train_df, valid_df = train_test_split(data_df, test_size=script_args.validation)
-    train_df = data_df
-    train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
-    # valid_data = Dataset.from_pandas(valid_df[["body", "question", "summary"]])
+    # train_df = data_df
+    train_data = Dataset.from_pandas(data_df[["body", "question", "summary"]])
     raw_datasets = DatasetDict({
-        "train": train_data,
-        # "valid": valid_data
+        "train": train_data
     })
 
     # preparing lora configuration
@@ -85,26 +94,42 @@ def main():
     )
 
     # loading the base model
-    with OnDevice(dtype=torch.bfloat16, device="meta", enabled=True):
-        try:
-            model = AutoModelForCausalLM.from_pretrained(
-                script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-                torch_dtype=torch.bfloat16, use_flash_attention_2=True, low_cpu_mem_usage=True,
-                cache_dir=script_args.cache_dir)
-        except ValueError:
-            model = AutoModelForCausalLM.from_pretrained(
-                script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
-                torch_dtype=torch.bfloat16, use_flash_attention_2=True, cache_dir=script_args.cache_dir)
+    if script_args.use_meta:
+        with OnDevice(dtype=torch.bfloat16, device="meta", enabled=True):
+            try:
+                model = AutoModelForCausalLM.from_pretrained(
+                    script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+                    torch_dtype=torch.bfloat16, use_flash_attention_2=script_args.flash_attention,
+                    low_cpu_mem_usage=True,
+                    cache_dir=script_args.cache_dir)
+            except ValueError:
+                model = AutoModelForCausalLM.from_pretrained(
+                    script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+                    torch_dtype=torch.bfloat16, use_flash_attention_2=script_args.flash_attention,
+                    cache_dir=script_args.cache_dir)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            script_args.model_path, use_cache=not train_args.gradient_checkpointing, token=hf_token,
+            torch_dtype=torch.bfloat16, use_flash_attention_2=script_args.flash_attention,
+            cache_dir=script_args.cache_dir)
     if train_args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
 
+    print(model)
     print(raw_datasets["train"])
     # creating trainer with collator
     collator = DataCollatorForCompletionOnlyLM(script_args.start_text, tokenizer=tokenizer)
-    # compute_metrics, _, _ = create_summarization_metrics(tokenizer)
+    compute_metrics, _, _ = create_summarization_metrics(tokenizer, script_args.start_text)
+    try:
+        gen_config = GenerationConfig.from_pretrained(script_args.model_path, cache_dir=script_args.cache_dir)
+    except OSError:
+        gen_config = GenerationConfig.from_model_config(model.config)
+    gen_config.max_new_tokens = script_args.model_max_new_tokens
+    train_args.generation_config = gen_config
+    model.generation_config = gen_config
     trainer = SFTTrainer(
         model=model, args=train_args, train_dataset=raw_datasets["train"],
-        formatting_func=lambda x: format_summary_example(x, tokenizer),
+        formatting_func=lambda x: format_summary_example(x, tokenizer, template),
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )

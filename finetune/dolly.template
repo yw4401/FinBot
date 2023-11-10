@@ -15,7 +15,7 @@
 {% if message['role'] == 'user' %}
 {{ '### Instruction: ' + message['content'].strip() + '\n\n' }}
 {% elif message['role'] == 'assistant' %}
-{{ '### Response:\n'  + message['content'].strip() + '### End' }}
+{{ '### Response:\n'  + message['content'].strip() + ' ### End' }}
 {% endif %}
 {% endfor %}
 {% if add_generation_prompt %}
