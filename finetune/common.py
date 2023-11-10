@@ -522,7 +522,7 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                 inputs, labels = formatting_func(examples)
 
                 if not self._dataset_sanity_checked:
-                    if not isinstance(inputs, str) or not isinstance(labels, str):
+                    if not isinstance(inputs, list) or not isinstance(labels, list):
                         raise ValueError(
                             "The `formatting_func` should return a pair strings since it can lead to silent bugs."
                         )
