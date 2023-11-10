@@ -73,7 +73,7 @@ class ElasticSearchTopicRetriever(BaseRetriever):
     #: the current time
     now: datetime.datetime
     #: the topic model id
-    model: int
+    model: str
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
         parallel = Parallel(n_jobs=len(self.topics), backend="threading", return_as="generator")
@@ -129,7 +129,7 @@ class ArticleChunkRetriever(BaseRetriever):
     #: the current time
     now: datetime.datetime
     #: the topic model id
-    model: int
+    model: str
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
         start_date = self.now - self.time_delta

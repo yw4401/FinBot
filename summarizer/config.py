@@ -91,11 +91,23 @@ KPI_PROMPT = ("You are a helpful AI assistant that will identify the top relevan
               "appropriate title with appropriate capitalization.\n"
               "KPIs: {kpi}\n\nCompany: {response}\n\nQuery: {query}\n\n"
               "{format_instructions}")
+REWRITE_PROMPT = ("You are a helpful AI assistant that will rewrite a current query that depends on "
+                  "a previous query and response so that the current query can be understood "
+                  "without referring to the previous query and response. If the meaning of the current query does not "
+                  "depend on the previous query and response, then repeat the content of the current query.\n\n"
+                  "Examples:\n"
+                  "Previous Query: What is the new LLM from OpenAI?\n\n"
+                  "Response: GPT-4\n\n"
+                  "Current Query: What does it do?\n"
+                  "Re-written Version: What does GPT-4, the new LLM from OpenAI do?\n\nFollow the example, and begin.\n\n"
+                  "Previous Query: {prev_query}\n\nResponse:\n{response}\n\n"
+                  "Current Query: {current_query}")
 
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
-QA_MODEL = "vertexai"
-SUM_MODEL = "custom"
-NER_MODEL = "vertexai"
-KPI_MODEL = "vertexai"
+QA_MODEL = "openai"
+SUM_MODEL = "openai"
+NER_MODEL = "openai"
+KPI_MODEL = "openai"
+REWRITE_MODEL = "openai"

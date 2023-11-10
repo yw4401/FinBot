@@ -7,6 +7,9 @@ from streamlit.string_util import escape_markdown
 import summarizer.ner as ner
 import summarizer.uiinterface as ui
 
+if "history" not in st.session_state:
+    st.session_state["history"] = []
+
 
 def format_sources(sources):
     existing_sources = set()
@@ -18,10 +21,7 @@ def format_sources(sources):
             existing_title.add(doc.metadata["title"])
 
 
-def display_summary_response(text, period):
-    with st.spinner("Thinking"):
-        response = ui.finbot_response(text, period)
-
+def display_summary_response(response):
     # Display the QA if exists
     resp_text = []
     answer = response["qa"]["answer"]
@@ -35,7 +35,8 @@ def display_summary_response(text, period):
         st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
-    valid_summaries = [summary for summary in response["summaries"] if "impossible to answer" not in summary["title"].lower()]
+    valid_summaries = [summary for summary in response["summaries"] if
+                       "impossible to answer" not in summary["title"].lower()]
     if len(valid_summaries) > 0:
         st.write("### Related to Your Query")
     for summary in valid_summaries:
@@ -99,6 +100,7 @@ def plot_data(data, ticker_symbol, summary, kpis):
 
 def create_screener(user_text, resp_text, period):
     str_resp = ". ".join(resp_text)
+    results = []
     with st.spinner("Extracting symbols"):
         ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
     if len(ticker_symbol) != 0:
@@ -110,12 +112,54 @@ def create_screener(user_text, resp_text, period):
                 with st.expander(label=ticker, expanded=False):
                     plot_data(data, ticker, summary, result)
                     st.write(f"https://finance.yahoo.com/quote/{ticker}")
+    return results
+
+
+def execute_research(history):
+    st.write("### Query")
+    st.write(f"**Question**: {history['user_text']}")
+    st.write(f"**Period**: {history['period']}")
+    with st.spinner("Thinking"):
+        new_text = ui.finbot_inject_context(history["user_text"], st.session_state["history"][:-1])
+        print(new_text)
+        response = ui.finbot_response(new_text, history["period"])
+    resp_text = display_summary_response(response)
+    screener_results = []
+    if len(resp_text) > 0:
+        screener_results = create_screener(history["user_text"], resp_text, history["period"])
+
+    history["kind"] = display_research_history
+    history["qa_resp"] = response
+    history["resp_text"] = resp_text
+    history["screener"] = screener_results
+
+
+def display_research_history(history):
+    st.write("### Query")
+    st.write(f"**Question**: {history['user_text']}")
+    st.write(f"**Period**: {history['period']}")
+    display_summary_response(history["qa_resp"])
+    if len(history["screener"]) > 0:
+        st.write("### You may be interested in:")
+    for ticker, data, summary, result in history["screener"][:3]:
+        with st.expander(label=ticker, expanded=False):
+            plot_data(data, ticker, summary, result)
+            st.write(f"https://finance.yahoo.com/quote/{ticker}")
+
+
+def display_histories():
+    for h in st.session_state["history"]:
+        h["kind"](h)
 
 
 def qa_ux(user_text, period):
-    qa_resp = display_summary_response(user_text, period)
-    if len(qa_resp) > 0:
-        create_screener(user_text, qa_resp, period)
+    history = {
+        "kind": execute_research,
+        "user_text": user_text,
+        "period": period
+    }
+
+    st.session_state["history"] += [history]
 
 
 def investment_advice():
@@ -130,22 +174,27 @@ def investment_ux(user_text, period):
     pass
 
 
+def on_ask_pressed():
+    if len(st.session_state["user_query"].strip()) > 0:
+        if investment_advice():
+            investment_ux(st.session_state["user_query"], st.session_state["time_period"])
+        else:
+            qa_ux(st.session_state["user_query"], st.session_state["time_period"])
+
+
 def main():
     st.title("FinBot")
 
-    user_text = st.text_input("Enter your question here:")
-    period = st.selectbox("Select the period:",
-                          ["1d", "5d", "1mo", "3mo", "6mo"])
+    display_histories()
+
+    st.write("### Query")
+    st.text_input("Enter your question here:", key="user_query")
+    st.selectbox("Select the period:",
+                 ["1d", "5d", "1mo", "3mo", "6mo"], key="time_period")
     st.write("**Note: As a large language model, FinBot can only guarantee best effort correctness of the response**")
     st.write("_Always double check the responses for substantial decisions_")
 
-    # Follow up logic
-
-    if st.button("Ask Finbot") and len(user_text.strip()) > 0:
-        if investment_advice():
-            investment_ux(user_text, period)
-        else:
-            qa_ux(user_text, period)
+    st.button("Ask FinBot", on_click=on_ask_pressed, key="user_asked")
 
 
 if __name__ == "__main__":

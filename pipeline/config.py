@@ -82,7 +82,7 @@ ES_TOPIC_MAPPING = {
         "metadata": {
             "properties": {
                 "topic": {"type": "integer", "index": True},
-                "model": {"type": "text", "index": True},
+                "model": {"type": "keyword", "index": True},
                 "recency": {"type": "date", "index": True}
             }
         }
@@ -104,10 +104,10 @@ ES_ARTICLES_MAPPING = {
         "metadata": {
             "properties": {
                 "title": {"type": "text", "index": True},
-                "url": {"type": "text", "index": False},
+                "url": {"type": "keyword", "index": False},
                 "entities": {"type": "text", "index": True},
                 "topic": {"type": "integer", "index": True},
-                "model": {"type": "text", "index": True},
+                "model": {"type": "keyword", "index": True},
                 "published_at": {"type": "date", "index": True},
             }
         }

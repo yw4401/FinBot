@@ -10,6 +10,7 @@ import google.cloud.bigquery.dbapi as bqapi
 import streamlit as st
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import OpenAI, VertexAI
+from langchain.prompts import PromptTemplate
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
 import httpx
 from pstock import Bars
@@ -304,6 +305,49 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
         raise NotImplemented()
 
 
+def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=256):
+    """
+    Gets a langchain LLM for injecting context into query.
+
+    :param kind: the type of model. Currently it supports PaLM2 ("vertexai"), GPT-3.5 ("openai")
+    :param max_token: the maximum number of tokens that can be emitted.
+    """
+    if kind == "vertexai":
+        plan_llm = VertexAI(
+            project=config.GCP_PROJECT,
+            temperature=0,
+            model_name="text-bison",
+            max_output_tokens=max_token
+        )
+        return plan_llm
+    elif kind == "openai":
+        with open(config.OPENAI_API) as fp:
+            key = fp.read().strip()
+
+        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
+                          temperature=0, max_tokens=max_token)
+        return plan_llm
+    else:
+        raise NotImplemented()
+
+
+def build_rewrite_chain(llm):
+    prompt = PromptTemplate.from_template(config.REWRITE_PROMPT)
+    return prompt | llm
+
+
+async def rewrite_query(history, current_query):
+    if len(history) == 0:
+        return current_query
+    last_interaction = history[-1]
+    prev_query = last_interaction["user_text"]
+    prev_resp = last_interaction["resp_text"]
+    result = await build_rewrite_chain(get_rewrite_llm()).ainvoke({"prev_query": prev_query,
+                                                                   "response": prev_resp,
+                                                                   "current_query": current_query})
+    return result
+
+
 async def answer_question(query, now, delta, model, topics):
     """
     Creates an async task to answer the user's query for a set of topics
@@ -387,10 +431,14 @@ def finbot_response(text, period):
     :param period: string representing how far back to go
     """
 
-    now = datetime.datetime(year=2023, month=10, day=31)
+    now = datetime.datetime(year=2023, month=11, day=10)
     delta = period_map[period]
     topic_model = get_model_num()
     return asyncio.run(get_qa_result(text, now, delta, topic_model))
+
+
+def finbot_inject_context(text, history):
+    return asyncio.run(rewrite_query(history, text))
 
 
 if __name__ == "__main__":
