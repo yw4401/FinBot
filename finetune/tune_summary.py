@@ -11,12 +11,11 @@ from transformers import (
     AutoTokenizer,
     Seq2SeqTrainingArguments,
     HfArgumentParser, )
-from trl import DataCollatorForCompletionOnlyLM
+from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 from sklearn.model_selection import train_test_split
 
 import config
-from common import format_summary_example, format_summary_eval, truncate_summary_example_chat, \
-    create_summarization_metrics, Seq2SeqSFTTrainer
+from common import format_summary_example, format_summary_eval, truncate_summary_example_chat
 
 
 @dataclass
@@ -66,12 +65,13 @@ def main():
                                                   buffer=script_args.buffer_len), axis=1)
     print(data_df.head())
     print(data_df.summary.iloc[0])
-    train_df, valid_df = train_test_split(data_df, test_size=script_args.validation)
+    # train_df, valid_df = train_test_split(data_df, test_size=script_args.validation)
+    train_df = data_df
     train_data = Dataset.from_pandas(train_df[["body", "question", "summary"]])
-    valid_data = Dataset.from_pandas(valid_df[["body", "question", "summary"]])
+    # valid_data = Dataset.from_pandas(valid_df[["body", "question", "summary"]])
     raw_datasets = DatasetDict({
         "train": train_data,
-        "valid": valid_data
+        # "valid": valid_data
     })
 
     # preparing lora configuration
@@ -101,12 +101,10 @@ def main():
     print(raw_datasets["train"])
     # creating trainer with collator
     collator = DataCollatorForCompletionOnlyLM(script_args.start_text, tokenizer=tokenizer)
-    compute_metrics, _, _ = create_summarization_metrics(tokenizer)
-    trainer = Seq2SeqSFTTrainer(
-        model=model, args=train_args, train_dataset=raw_datasets["train"], eval_dataset=raw_datasets["valid"],
-        input_format_func=lambda x: format_summary_example(x, tokenizer),
-        eval_format_func=lambda x: format_summary_eval(x, tokenizer),
-        compute_metrics=compute_metrics,
+    # compute_metrics, _, _ = create_summarization_metrics(tokenizer)
+    trainer = SFTTrainer(
+        model=model, args=train_args, train_dataset=raw_datasets["train"],
+        formatting_func=lambda x: format_summary_example(x, tokenizer),
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )
