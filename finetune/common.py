@@ -111,20 +111,26 @@ def format_llama_example(example, system, user_func, resp_func, tokenizer, templ
 
 
 def format_llama_eval_example(example, system, user_func, resp_func, tokenizer, template=None):
-    s = resp_func(example)
-    user = user_func(example)
+    output_texts = []
+    label_texts = []
 
-    text = tokenizer.apply_chat_template([
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-        {"role": "assistant", "content": ""}
-    ], tokenize=False, chat_template=template)
-    if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
-        text = text[len(tokenizer.bos_token):]
-    if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
-        text = text[:-len(tokenizer.eos_token)]
+    for i in range(len(example['body'])):
+        s = resp_func(example)
+        user = user_func(example)
 
-    return text, s
+        text = tokenizer.apply_chat_template([
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+            {"role": "assistant", "content": ""}
+        ], tokenize=False, chat_template=template)
+        if text[:len(tokenizer.bos_token)] == tokenizer.bos_token:
+            text = text[len(tokenizer.bos_token):]
+        if text[-len(tokenizer.eos_token):] == tokenizer.eos_token:
+            text = text[:-len(tokenizer.eos_token)]
+        output_texts.append(text)
+        label_texts.append(s)
+
+    return output_texts, label_texts
 
 
 def format_summary_example(example, tokenizer, template=None):
@@ -539,15 +545,9 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
                     return_overflowing_tokens=False,
                     return_length=False,
                 )
-                print(input_tokenized)
                 return {"input_ids": input_tokenized["input_ids"],
                         "attention_mask": input_tokenized["attention_mask"], "labels": labels_tokenized["input_ids"]}
 
-            def iterate_over_data(dataset):
-                for i in dataset:
-                    yield dict(i)
-
-            dataset = Dataset.from_list([i for i in iterate_over_data(dataset)])
             valid_data = dataset.map(
                 tokenize,
                 batched=True,
