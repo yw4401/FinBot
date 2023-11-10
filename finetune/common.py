@@ -514,6 +514,7 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
 
             def tokenize(examples):
                 inputs, labels = formatting_func(examples)
+                print(inputs)
 
                 if not self._dataset_sanity_checked:
                     if not isinstance(inputs, str) or not isinstance(labels, str):
