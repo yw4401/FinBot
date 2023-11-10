@@ -115,8 +115,8 @@ def format_llama_eval_example(example, system, user_func, resp_func, tokenizer, 
     label_texts = []
 
     for i in range(len(example['body'])):
-        s = resp_func(example)
-        user = user_func(example)
+        s = resp_func(get_batch_row(example, i))
+        user = user_func(get_batch_row(example, i))
 
         input_text = tokenizer.apply_chat_template([
             {"role": "system", "content": system},
