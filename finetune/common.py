@@ -35,7 +35,7 @@ from trl.trainer import (
     ConstantLengthDataset,
     DataCollatorForCompletionOnlyLM
 )
-from datasets import IterableDataset
+from datasets import Dataset
 
 import config
 
@@ -544,9 +544,9 @@ class Seq2SeqSFTTrainer(Seq2SeqTrainer):
 
             def iterate_over_data(dataset):
                 for i in dataset:
-                    yield i
+                    yield dict(i)
 
-            dataset = IterableDataset.from_generator(iterate_over_data(dataset))
+            dataset = Dataset.from_list([i for i in iterate_over_data(dataset)])
             valid_data = dataset.map(
                 tokenize,
                 batched=True,
