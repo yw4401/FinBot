@@ -34,15 +34,13 @@ def select_titles(topic_df, topic, limiter, base_prompt):
     end_idx = len(topic_segment.index)
     prompt = base_prompt
     agg_text = ""
-    row_format = "Published at: %s Title: %s\n"
+    row_format = "Title: %s\n"
     while limiter(prompt) and current_idx < end_idx:
-        timestamp = topic_segment.iloc[current_idx]["published"]
-        timestamp_str = timestamp.strftime("%m/%d/%Y")
-        agg_text = agg_text + row_format % (timestamp_str, topic_segment.iloc[current_idx]["title"])
+        agg_text = agg_text + row_format % (topic_segment.iloc[current_idx]["title"])
         prompt = base_prompt.format(text=agg_text)
         current_idx = current_idx + 1
     logging.info("Summarizing themes using the prompt:\n%s" % prompt)
-    return prompt
+    return prompt.strip()
 
 
 def create_huggingface_topic_summarizer(model, prompt=config.TOPIC_SUM_HF_PROMPT, temperature=0,
@@ -88,7 +86,22 @@ def create_lc_summarizer(chain, adapter=lambda x: x, max_prompt_tokens=4096):
     return summarize_topic
 
 
-def create_topic_summarizer(kind="lc", **kwargs):
+def create_passthrough_summarizer(max_prompt_tokens=512):
+    engine = "gpt-3.5-turbo"
+    encoding = tiktoken.encoding_for_model(engine)
+
+    def token_count_limiter(prompt):
+        tokens = encoding.encode(prompt)
+        return len(tokens) <= max_prompt_tokens
+
+    def summarize_topic(topic_df, topic_number):
+        final_prompt = select_titles(topic_df, topic_number, token_count_limiter, base_prompt="{text}")
+        return final_prompt
+
+    return summarize_topic
+
+
+def create_topic_summarizer(kind="pass", **kwargs):
     """
     This creates a summarizer function that will summarize the theme of the articles in a given topic.
     The signature of the summarizer function is summarizer: (DataFrame, Integer) -> String. It will select
@@ -99,6 +112,8 @@ def create_topic_summarizer(kind="lc", **kwargs):
         return create_huggingface_topic_summarizer(**kwargs)
     if kind == "lc":
         return create_lc_summarizer(**kwargs)
+    if kind == "pass":
+        return create_passthrough_summarizer(**kwargs)
     raise ValueError("Invalid kind: " + kind)
 
 

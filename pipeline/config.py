@@ -21,9 +21,9 @@ ARTICLE_COREF_SPACY_MOD = "en_core_web_sm"
 TOPIC_BUCKET = "topic-models-null"
 TOPIC_TTL_DAY = 5
 TOPIC_FIT_RANGE_DAY = int(((30 + 31) / 2) * 6)
-TOPIC_EMBEDDING = "all-MiniLM-L6-v2"
+TOPIC_EMBEDDING = "shilongdai/finember"
 TOPIC_UMAP_NEIGHBORS = 15
-TOPIC_UMAP_COMPONENTS = 5
+TOPIC_UMAP_COMPONENTS = 32
 TOPIC_UMAP_MIN_DIST = 0
 TOPIC_UMAP_METRIC = "euclidean"
 TOPIC_HDBSCAN_MIN_SIZE = 5
@@ -96,6 +96,13 @@ ES_ARTICLES_MAPPING = {
     "properties": {
         "chunk_text": {"type": "text", "index": True},
         "chunk_text_embedding": {
+            "type": "dense_vector",
+            "dims": 1024,
+            "index": True,
+            "similarity": "cosine"
+        },
+        "topic_text": {"type": "text", "index": True},
+        "topic_text_embedding": {
             "type": "dense_vector",
             "dims": 1024,
             "index": True,

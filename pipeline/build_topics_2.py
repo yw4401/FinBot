@@ -1,32 +1,31 @@
 import datetime
+import gc
 import os
-from contextlib import closing
-
-import pandas as pd
-from joblib import Parallel, delayed
-from tqdm import tqdm
-from umap import UMAP
-from hdbscan import HDBSCAN
-from sentence_transformers import SentenceTransformer
-from sklearn.feature_extraction.text import CountVectorizer
-from bertopic import BERTopic
-from google.oauth2 import service_account
-from bertopic.vectorizers import ClassTfidfTransformer
-import config
-import google.cloud.bigquery as bq
-import google.cloud.bigquery.dbapi as bqapi
-
-from pipeline.common import download_blob, upload_blob, BigquerySession
-from summarize_topics import summarization_wrapper, create_topic_summarizer, create_palm2_chain
 import shutil
 import uuid
-import gc
+from contextlib import closing
+
+import google.cloud.bigquery as bq
+import google.cloud.bigquery.dbapi as bqapi
+import pandas as pd
+from bertopic import BERTopic
+from bertopic.vectorizers import ClassTfidfTransformer
+from hdbscan import HDBSCAN
+from joblib import Parallel, delayed
+from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import CountVectorizer
+from tqdm import tqdm
+from umap import UMAP
+
+import config
+from pipeline.common import download_blob, upload_blob, BigquerySession
+from summarize_topics import summarization_wrapper, create_topic_summarizer
 
 
 def get_topicless_articles(client, model):
     query = "SELECT CA.id, CA.title, CA.coref, CA.published " \
             "FROM Articles.CleanedArticles AS CA LEFT JOIN Articles.ArticleTopic TA ON CA.id = TA.article_id " \
-            f"WHERE TA.article_id IS NULL AND (TA.model != %s OR TA.model IS NULL) AND " \
+            f"WHERE (TA.article_id IS NULL OR TA.model IS NULL OR TA.model != %s) AND " \
             f"CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_FIT_RANGE_DAY} DAY)"
     results = []
 
@@ -84,9 +83,7 @@ def identify_topics(df: pd.DataFrame):
 
 def summarize_topics(df: pd.DataFrame, jobs=7):
     topics = list(set(df.topic.unique()))
-    credentials = service_account.Credentials.from_service_account_file(config.VERTEX_AI_KEY_PATH)
-    summarizer = create_topic_summarizer("lc", chain=create_palm2_chain(credentials=credentials),
-                                         adapter=lambda x: x["text"]["summary"].strip())
+    summarizer = create_topic_summarizer("pass")
     parallel = Parallel(n_jobs=jobs, backend="threading", return_as="generator")
     topic_sum = pd.DataFrame({
         "topic": topics,
@@ -206,7 +203,7 @@ def categorize_articles(client):
     return id, articles
 
 
-def write_article_topics(articles, model_id, batch_size=100, jobs=8):
+def write_article_topics(articles, model_id, batch_size=1000, jobs=8):
     params = [(row["id"], model_id, row["topic"], row["topic_prob"]) for _, row in articles.iterrows()]
     batches = []
     for i in range(0, len(params), batch_size):
