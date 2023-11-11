@@ -31,8 +31,8 @@ class ScriptArguments:
 
 def prepare_conversation(row, tokenizer, chat_template=None):
     conversation = [{"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
-                    {"role": "user", "content": format_llama_sum_user(question=row["question"],
-                                                                      body=row["body"])}]
+                    {"role": "user", "content": format_llama_sum_user(dict(question=row["question"],
+                                                                           body=row["body"]))}]
     chat_form = tokenizer.apply_chat_template(conversation, chat_template=chat_template,
                                               tokenize=False, add_generation_prompt=True)
     return chat_form
@@ -68,7 +68,8 @@ if __name__ == "__main__":
                                                   summary=row["summary"],
                                                   tokenizer=tokenizer,
                                                   max_context=script_args.max_input_length), axis=1)
-    raw_inputs = test_df.apply(lambda row: prepare_conversation(row, tokenizer, chat_template=template), axis=1).tolist()
+    raw_inputs = test_df.apply(lambda row: prepare_conversation(row, tokenizer, chat_template=template),
+                               axis=1).tolist()
     results = []
     for i, output in enumerate(llm.generate(raw_inputs, sampling_params)):
         prompt = output.prompt
