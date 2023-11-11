@@ -166,7 +166,7 @@ def create_es_topic_idx(client: Elasticsearch, encoder, topic_sum_df):
     return topic_embeddings
 
 
-def create_es_chunk_docs(encoder: SentenceTransformer, row, topic_row):
+def create_es_chunk_docs(row, topic_row):
     """
     creates the elastic search document for an article chunl
 
@@ -174,13 +174,12 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row, topic_row):
     :param row: a pandas dataframe row corresponding to a chunk of articles
     """
 
-    embeddings = encoder.encode(row["chunks"], show_progress_bar=True)
     published = row["published"].replace(tzinfo=datetime.timezone.utc).strftime('%Y-%m-%d')
     for i, chunk in enumerate(row["chunks"]):
         chunk_id = "{article_id}-{chunk_idx}".format(article_id=row["id"], chunk_idx=i)
         yield chunk_id, {
             "chunk_text": chunk,
-            "chunk_text_embedding": embeddings[i].tolist(),
+            "chunk_text_embedding": [0 for _ in range(1024)],
             "topic_text": topic_row["summary"],
             "topic_text_embedding": topic_row["embeddings"],
             "metadata": {
@@ -210,19 +209,24 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df, topic_df):
         client.indices.get(index=config.ES_ARTICLE_INDEX)
 
     article_df = preprocess_articles(article_df, splitter=create_splitter())
+    total_chunks = []
+    for i, row in article_df.iterrows():
+        corresponding_topic = topic_df.loc[(topic_df.topic == row["topic"]) & (topic_df.model == row["model"])]
+        if corresponding_topic.shape[0] == 0:
+            corresponding_topic = {
+                "summary": "",
+                "embeddings": [0 for _ in range(1024)]
+            }
+        else:
+            corresponding_topic = corresponding_topic.iloc[0]
+        total_chunks.extend([(id_chunk, doc) for id_chunk, doc in create_es_chunk_docs(row, corresponding_topic)])
+    chunk_embeddings = encoder.encode([doc["chunk_text"] for _, doc in total_chunks], show_progress_bar=True)
+    for (_, doc), embedding in zip(total_chunks, chunk_embeddings):
+        doc["chunk_text_embedding"] = embedding.tolist()
 
-    with tqdm(total=article_df.shape[0]) as progress:
-        for i, row in article_df.iterrows():
-            corresponding_topic = topic_df.loc[(topic_df.topic == row["topic"]) & (topic_df.model == row["model"])]
-            if corresponding_topic.shape[0] == 0:
-                corresponding_topic = {
-                    "summary": "",
-                    "embeddings": [0 for _ in range(1024)]
-                }
-            else:
-                corresponding_topic = corresponding_topic.iloc[0]
-            for id_chunk, doc in create_es_chunk_docs(encoder, row, corresponding_topic):
-                client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
+    with tqdm(total=len(total_chunks)) as progress:
+        for id_chunk, doc in total_chunks:
+            client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
             progress.update(1)
 
 
