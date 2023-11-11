@@ -2,6 +2,7 @@ from contextlib import closing
 
 import datetime
 
+import numpy as np
 import pandas as pd
 import spacy
 import torch
@@ -19,6 +20,7 @@ import config
 tqdm.pandas()
 if torch.cuda.is_available():
     device = "cuda"
+    spacy.prefer_gpu()
 elif torch.backends.mps.is_available():
     device = "mps"
 else:
@@ -208,14 +210,16 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df, topic_df):
         client.indices.create(index=config.ES_ARTICLE_INDEX, mappings=config.ES_ARTICLES_MAPPING)
         client.indices.get(index=config.ES_ARTICLE_INDEX)
 
+    topic_current = topic_df.loc[topic_df.model == article_df.model.iloc[0]]
+    mean_embedding = list(np.stack(topic_current.embeddings.tolist()).mean(axis=1))
     article_df = preprocess_articles(article_df, splitter=create_splitter())
     total_chunks = []
     for i, row in article_df.iterrows():
-        corresponding_topic = topic_df.loc[(topic_df.topic == row["topic"]) & (topic_df.model == row["model"])]
+        corresponding_topic = topic_current.loc[topic_df.topic == row["topic"]]
         if corresponding_topic.shape[0] == 0:
             corresponding_topic = {
                 "summary": "",
-                "embeddings": [0 for _ in range(1024)]
+                "embeddings": mean_embedding
             }
         else:
             corresponding_topic = corresponding_topic.iloc[0]
