@@ -7,17 +7,17 @@ from contextlib import closing
 
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
+import httpx
 import streamlit as st
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import OpenAI, VertexAI
-from langchain.prompts import PromptTemplate
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
-import httpx
 from pstock import Bars
 
 import summarizer.config as config
 import summarizer.ner as ner
-from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics
+from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics, \
+    RAGFusionRetriever, ArticleChunkRetriever
 
 with open(config.ES_KEY_PATH, "r") as fp:
     es_key = fp.read().strip()
@@ -305,7 +305,7 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
         raise NotImplemented()
 
 
-def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=256):
+def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=512):
     """
     Gets a langchain LLM for injecting context into query.
 
@@ -331,28 +331,13 @@ def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=256):
         raise NotImplemented()
 
 
-def build_rewrite_chain(llm):
-    prompt = PromptTemplate.from_template(config.REWRITE_PROMPT)
-    return prompt | llm
-
-
-async def rewrite_query(history, current_query):
-    if len(history) == 0:
-        return current_query
-    last_interaction = history[-1]
-    prev_query = last_interaction["user_text"]
-    prev_resp = last_interaction["resp_text"]
-    result = await build_rewrite_chain(get_rewrite_llm()).ainvoke({"prev_query": prev_query,
-                                                                   "response": prev_resp,
-                                                                   "current_query": current_query})
-    return result
-
-
-async def answer_question(query, now, delta, model, topics):
+async def answer_question(query, now, delta, model, topics, prev_query="", prev_response=""):
     """
     Creates an async task to answer the user's query for a set of topics
 
     :param query: the user query
+    :param prev_query: the previous user query
+    :param prev_response: the previous user response
     :param now: the current time
     :param delta: the timedelta for how far back to go
     :param model: the topic model number
@@ -360,12 +345,15 @@ async def answer_question(query, now, delta, model, topics):
     """
 
     plan_llm = get_qa_llm()
-    retriever = ElasticSearchTopicRetriever(topic_elasticstore=get_topic_store(),
-                                            chunks_elasticstore=get_article_store(),
-                                            time_delta=delta,
-                                            now=now,
-                                            model=model,
-                                            topics=topics)
+    retriever = ArticleChunkRetriever(
+        chunks_elasticstore=get_article_store(),
+        time_delta=delta,
+        now=now,
+        model=model,
+        topic=-1)
+    retriever = RAGFusionRetriever(rewrite_llm=get_rewrite_llm(),
+                                   base_retriever=retriever,
+                                   prev_query=prev_query, prev_response=prev_response)
     qa_agg_chain = topic_aggregate_chain(plan_llm, retriever)
     qa_result = await qa_agg_chain.acall(query)
     return {
@@ -389,11 +377,13 @@ def find_summaries(query, topics, model, now, delta):
     return aget_summaries(query, topics, now, delta, model, get_article_store(), plan_llm)
 
 
-async def get_qa_result(query, now, delta, model):
+async def get_qa_result(query, now, delta, model, prev_query="", prev_response=""):
     """
     async function for concurrently generating the qa response, and also the key-point summaries
 
     :param query: the user query string
+    :param prev_query: the previous user query
+    :param prev_response: the previous response
     :param now: the current time
     :param delta: the timedelta for how far back to go
     :param model: the topic model number
@@ -423,7 +413,7 @@ period_map = {
 }
 
 
-def finbot_response(text, period):
+def finbot_response(text, period, history):
     """
     Gets the qa and summarization result given query and timeframe:
 
@@ -434,11 +424,13 @@ def finbot_response(text, period):
     now = datetime.datetime(year=2023, month=11, day=10)
     delta = period_map[period]
     topic_model = get_model_num()
-    return asyncio.run(get_qa_result(text, now, delta, topic_model))
-
-
-def finbot_inject_context(text, history):
-    return asyncio.run(rewrite_query(history, text))
+    actual_history = history[:-1]
+    if len(actual_history) != 0:
+        return asyncio.run(get_qa_result(text, now, delta, topic_model,
+                                         prev_query=actual_history[-1]["user_text"],
+                                         prev_response=actual_history[-1]["resp_text"]))
+    else:
+        return asyncio.run(get_qa_result(text, now, delta, topic_model))
 
 
 if __name__ == "__main__":

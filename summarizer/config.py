@@ -50,6 +50,15 @@ QA_RESP_PROMPT = (
     "If you cannot answer the question via the given context, respond with "
     '"Sorry, I cannot answer this question using the articles."\n\nBEGIN CONTEXT:\n{context}\n\n'
     'BEGIN QUESTION:\n{question}')
+FUSION_PROMPT = ("You are an AI assistant that will help with optimizing queries for a retrieval augmented generation "
+                 "system. You will be given a current query, the previous query before the current query, and the "
+                 "previous response associated with the previous query. Then, you will first rewrite the current "
+                 "query based on the previous query and response so that the meaning and intent of the rewritten query "
+                 "does not depend on the previous query and response. Finally, you will also come up with 5 "
+                 "optimized alternative queries with the same intent of the current query but asked in different ways. "
+                 "\n\n{format_instructions}\n\nPrevious Query: {previous_query}\n\nPrevious Response: {response}\n\n"
+                 "Current Query: {current_query}\n\nFollow the instructions in both content and formatting.")
+FUSION_CHUNKS = 7
 
 
 # Article Summary Response

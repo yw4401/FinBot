@@ -120,9 +120,8 @@ def execute_research(history):
     st.write(f"**Question**: {history['user_text']}")
     st.write(f"**Period**: {history['period']}")
     with st.spinner("Thinking"):
-        new_text = ui.finbot_inject_context(history["user_text"], st.session_state["history"][:-1])
-        print(new_text)
-        response = ui.finbot_response(new_text, history["period"])
+        new_text = history["user_text"]
+        response = ui.finbot_response(new_text, history["period"], st.session_state["history"])
     resp_text = display_summary_response(response)
     screener_results = []
     if len(resp_text) > 0:
