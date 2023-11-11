@@ -19,6 +19,8 @@ import config
 tqdm.pandas()
 if torch.cuda.is_available():
     device = "cuda"
+elif torch.backends.mps.is_available():
+    device = "mps"
 else:
     device = "cpu"
 
@@ -119,7 +121,7 @@ def preprocess_articles(article_df, splitter):
     return article_df
 
 
-def create_es_topic_doc(encoder: SentenceTransformer, row):
+def create_es_topic_doc(row, embedding):
     """
     Creates the elastic search documents for a topic
 
@@ -127,7 +129,6 @@ def create_es_topic_doc(encoder: SentenceTransformer, row):
     :param row: a Pandas dataframe row corresponding to a topic
     """
 
-    embedding = encoder.encode(row["summary"])
     return {
         "description": row["summary"],
         "description_embedding": embedding.tolist(),
@@ -155,15 +156,17 @@ def create_es_topic_idx(client: Elasticsearch, encoder, topic_sum_df):
         client.indices.create(index=config.ES_TOPIC_INDEX, mappings=config.ES_TOPIC_MAPPING)
         client.indices.get(index=config.ES_TOPIC_INDEX)
 
+    topic_embeddings = list(encoder.encode(topic_sum_df["summary"], show_progress_bar=True))
     with tqdm(total=topic_sum_df.shape[0]) as progress:
         for i, topic in topic_sum_df.iterrows():
             doc_id = topic_id_format.format(topic_model=topic["model"], topic_num=topic["topic"])
             client.update(index=config.ES_TOPIC_INDEX, id=doc_id,
-                          doc=create_es_topic_doc(encoder, topic), doc_as_upsert=True)
+                          doc=create_es_topic_doc(topic, topic_embeddings[i]), doc_as_upsert=True)
             progress.update(1)
+    return topic_embeddings
 
 
-def create_es_chunk_docs(encoder: SentenceTransformer, row):
+def create_es_chunk_docs(encoder: SentenceTransformer, row, topic_row):
     """
     creates the elastic search document for an article chunl
 
@@ -171,13 +174,15 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
     :param row: a pandas dataframe row corresponding to a chunk of articles
     """
 
-    embeddings = encoder.encode(row["chunks"])
+    embeddings = encoder.encode(row["chunks"], show_progress_bar=True)
     published = row["published"].replace(tzinfo=datetime.timezone.utc).strftime('%Y-%m-%d')
     for i, chunk in enumerate(row["chunks"]):
         chunk_id = "{article_id}-{chunk_idx}".format(article_id=row["id"], chunk_idx=i)
         yield chunk_id, {
             "chunk_text": chunk,
             "chunk_text_embedding": embeddings[i].tolist(),
+            "topic_text": topic_row["summary"],
+            "topic_text_embedding": topic_row["embeddings"],
             "metadata": {
                 "title": row["title"].strip(),
                 "url": row["url"].strip(),
@@ -189,7 +194,7 @@ def create_es_chunk_docs(encoder: SentenceTransformer, row):
         }
 
 
-def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
+def create_es_doc_idx(client: Elasticsearch, encoder, article_df, topic_df):
     """
     creates or update an elastic search index corresponding to the articles
 
@@ -208,7 +213,15 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df):
 
     with tqdm(total=article_df.shape[0]) as progress:
         for i, row in article_df.iterrows():
-            for id_chunk, doc in create_es_chunk_docs(encoder, row):
+            corresponding_topic = topic_df.loc[(topic_df.topic == row["topic"]) & (topic_df.model == row["model"])]
+            if corresponding_topic.shape[0] == 0:
+                corresponding_topic = {
+                    "summary": "",
+                    "embeddings": [0 for _ in range(1024)]
+                }
+            else:
+                corresponding_topic = corresponding_topic.iloc[0]
+            for id_chunk, doc in create_es_chunk_docs(encoder, row, corresponding_topic):
                 client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
             progress.update(1)
 
@@ -281,9 +294,10 @@ if __name__ == "__main__":
     with closing(bq.Client(project=config.GCP_PROJECT)) as client:
         topic_df = get_unindexed_topics(client=client)
         print("Building Topic Indices")
-        create_es_topic_idx(client=elastic_client, encoder=encoder, topic_sum_df=topic_df)
+        topic_embeddings = create_es_topic_idx(client=elastic_client, encoder=encoder, topic_sum_df=topic_df)
+        topic_df["embeddings"] = topic_embeddings
         for m in topic_df.model.unique():
             article_df = get_articles_by_topics(client=client, model=m)
             print(f"Building Article Indices for {m}")
-            create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df)
+            create_es_doc_idx(client=elastic_client, encoder=encoder, article_df=article_df, topic_df=topic_df)
             flip_servable(client, m)
