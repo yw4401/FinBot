@@ -197,7 +197,7 @@ def get_embeddings():
 
 
 @st.cache_resource
-def get_keyword_extractor(model="en_web_core_sm"):
+def get_keyword_extractor(model="en_core_web_sm"):
     nlp = spacy.load(model, enable=["ner"])
     return nlp
 

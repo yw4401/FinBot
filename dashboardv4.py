@@ -49,10 +49,6 @@ def display_summary_response(response):
         with st.expander("Sources"):
             format_sources(response["qa"]["sources"])
             st.write("")
-        with st.expander("Chunks"):
-            for doc in response["qa"]["sources"]:
-                st.write(escape_markdown(ui.tex_escape(doc.page_content)))
-                st.write("")
         st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints

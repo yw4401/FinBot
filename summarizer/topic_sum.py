@@ -133,7 +133,7 @@ class ArticleChunkHybridRetriever(BaseRetriever):
     #: the asynchronous elastic search client
     elastic_client: Elasticsearch
     #: spacy pipeline
-    spacy_nlp: spacy.pipeline.pipe
+    spacy_nlp: Any
     #: sentence transformer
     encoder: Embeddings
     #: index name
@@ -231,21 +231,6 @@ class ArticleChunkHybridRetriever(BaseRetriever):
             search_args.append({"term": {"metadata.topic": self.topic}})
         return search_args
 
-    def _build_text_query(self, field, text):
-        text_doc: Doc = self.spacy_nlp(text)
-        keywords = []
-        for ent in text_doc.ents:
-            keywords.append(ent.text.strip())
-
-        return {
-            "query": {
-                "match": {
-                    field: " ".join(keywords)
-                },
-                "filter": self._build_filter()
-            }
-        }
-
     def _build_knn_subquery(self, field, vector):
         return {
             "filter": self._build_filter(),
@@ -262,22 +247,32 @@ class ArticleChunkHybridRetriever(BaseRetriever):
             vector_query_field: str,
             text_fields: List[str],
     ) -> Dict:
-        return {
-            "query": {
-                "multi_match": {
-                    "query": query_text,
-                    "type": "best_fields",
-                    "fields": text_fields
-                }
-            },
-            "knn": self._build_knn_subquery(vector_query_field, query_vector),
-            "rank": {
-                "rrf": {
-                    "window_size": self.fetch_k,
-                    "rank_constant": self.rrf_k
+        text_doc: Doc = self.spacy_nlp(query_text)
+        keywords = []
+        for ent in text_doc.ents:
+            keywords.append(ent.text.strip())
+
+        if len(keywords) > 0:
+            return {
+                "query": {
+                    "multi_match": {
+                        "query": " ".join(keywords),
+                        "type": "best_fields",
+                        "fields": text_fields
+                    }
+                },
+                "knn": self._build_knn_subquery(vector_query_field, query_vector),
+                "rank": {
+                    "rrf": {
+                        "window_size": self.fetch_k,
+                        "rank_constant": self.rrf_k
+                    }
                 }
             }
-        }
+        else:
+            return {
+                "knn": self._build_knn_subquery(vector_query_field, query_vector)
+            }
 
 
 class RAGFusionRetriever(BaseRetriever):
