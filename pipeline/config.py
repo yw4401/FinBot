@@ -72,7 +72,9 @@ ES_KEY_PATH = "../es_key"
 ES_TOPIC_INDEX = "topics"
 ES_TOPIC_MAPPING = {
     "properties": {
-        "description": {"type": "text", "index": True},
+        "description": {"type": "text",
+                        "analyzer": "english",
+                        "index": True},
         "description_embedding": {
             "type": "dense_vector",
             "dims": 1024,
@@ -94,14 +96,14 @@ ES_ARTICLE_INDEX = "articles"
 ES_ARTICLE_ENTITIES = {"ORG", "PERSON", "GPE", "PRODUCT", "LAW"}
 ES_ARTICLES_MAPPING = {
     "properties": {
-        "chunk_text": {"type": "text", "index": True},
+        "chunk_text": {"type": "text", "analyzer": "english", "index": True},
         "chunk_text_embedding": {
             "type": "dense_vector",
             "dims": 1024,
             "index": True,
             "similarity": "cosine"
         },
-        "topic_text": {"type": "text", "index": True},
+        "topic_text": {"type": "text", "analyzer": "english", "index": True},
         "topic_text_embedding": {
             "type": "dense_vector",
             "dims": 1024,
@@ -110,9 +112,9 @@ ES_ARTICLES_MAPPING = {
         },
         "metadata": {
             "properties": {
-                "title": {"type": "text", "index": True},
+                "title": {"type": "text", "analyzer": "english", "index": True},
                 "url": {"type": "keyword", "index": False},
-                "entities": {"type": "text", "index": True},
+                "entities": {"type": "text", "analyzer": "english", "index": True},
                 "topic": {"type": "integer", "index": True},
                 "model": {"type": "keyword", "index": True},
                 "published_at": {"type": "date", "index": True},

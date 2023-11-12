@@ -4,16 +4,17 @@ import re
 import urllib
 import urllib.parse
 from contextlib import closing
-from typing import List
 
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
 import httpx
+import spacy
 import streamlit as st
+from elasticsearch import Elasticsearch
 from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import OpenAI, VertexAI
-from langchain.output_parsers import PydanticOutputParser, NumberedListOutputParser
+from langchain.output_parsers import NumberedListOutputParser
 from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, \
     ChatPromptTemplate
 from langchain.schema import HumanMessage, AIMessage
@@ -23,12 +24,7 @@ from pstock import Bars
 import summarizer.config as config
 import summarizer.ner as ner
 from summarizer.topic_sum import topic_aggregate_chain, aget_summaries, afind_top_topics, \
-    RAGFusionRetriever, ArticleChunkRetriever, ContextFusionQuery
-
-with open(config.ES_KEY_PATH, "r") as fp:
-    es_key = fp.read().strip()
-with open(config.ES_CLOUD_ID_PATH, "r") as fp:
-    es_id = fp.read().strip()
+    RAGFusionRetriever, ArticleChunkHybridRetriever
 
 
 class YFinance:
@@ -172,16 +168,44 @@ async def fetch_all_tickers(tickers, query, period):
     return [r for r in results if not isinstance(r, Exception)]
 
 
+@st.cache_data
+def get_es_credentials():
+    with open(config.ES_KEY_PATH, "r") as fp:
+        es_key = fp.read().strip()
+    with open(config.ES_CLOUD_ID_PATH, "r") as fp:
+        es_id = fp.read().strip()
+    return es_id, es_key
+
+
+@st.cache_data
+def get_openai_credentials():
+    with open(config.OPENAI_API) as fp:
+        key = fp.read().strip()
+    return key
+
+
+@st.cache_resource
+def get_async_elastic():
+    es_id, es_key = get_es_credentials()
+    return Elasticsearch(cloud_id=es_id, api_key=es_key)
+
+
 @st.cache_resource
 def get_embeddings():
     embedding = SentenceTransformerEmbeddings(model_name=config.FILTER_EMBEDDINGS, model_kwargs={'device': 'cpu'})
-
     return embedding
+
+
+@st.cache_resource
+def get_keyword_extractor(model="en_web_core_sm"):
+    nlp = spacy.load(model, enable=["ner"])
+    return nlp
 
 
 @st.cache_resource
 def get_topic_store():
     embedding = get_embeddings()
+    es_id, es_key = get_es_credentials()
     topic_store = ElasticsearchStore(index_name=config.ES_TOPIC_INDEX, embedding=embedding,
                                      es_cloud_id=es_id, es_api_key=es_key,
                                      vector_query_field=config.ES_TOPIC_VECTOR_FIELD,
@@ -192,6 +216,7 @@ def get_topic_store():
 @st.cache_resource
 def get_article_store():
     embedding = get_embeddings()
+    es_id, es_key = get_es_credentials()
     article_store = ElasticsearchStore(index_name=config.ES_ARTICLE_INDEX, embedding=embedding,
                                        es_cloud_id=es_id, es_api_key=es_key,
                                        vector_query_field=config.ES_ARTICLE_VECTOR_FIELD,
@@ -268,10 +293,7 @@ def get_qa_llm(kind=config.QA_MODEL, max_token=256):
         )
         return plan_llm
     elif kind == "openai":
-        with open(config.OPENAI_API) as fp:
-            key = fp.read().strip()
-
-        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
+        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=get_openai_credentials(),
                           temperature=0, max_tokens=max_token)
         return plan_llm
     else:
@@ -301,10 +323,7 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
                           openai_api_key="EMPTY", presence_penalty=1)
         return plan_llm
     elif kind == "openai":
-        with open(config.OPENAI_API) as fp:
-            key = fp.read().strip()
-
-        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
+        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=get_openai_credentials(),
                           temperature=0, max_tokens=max_token)
         return plan_llm
     else:
@@ -327,10 +346,7 @@ def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=1024):
         )
         return plan_llm
     elif kind == "openai":
-        with open(config.OPENAI_API) as fp:
-            key = fp.read().strip()
-
-        plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key,
+        plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=get_openai_credentials(),
                               temperature=0, max_tokens=max_token)
         return plan_llm
     else:
@@ -349,13 +365,17 @@ async def answer_question(query, now, delta, model, augmented_queries):
     """
 
     plan_llm = get_qa_llm()
-    retriever = ArticleChunkRetriever(
-        chunks_elasticstore=get_article_store(),
+    retriever = ArticleChunkHybridRetriever(
+        elastic_client=get_async_elastic(),
+        spacy_nlp=get_keyword_extractor(),
+        encoder=get_embeddings(),
+        fetch_k=config.FUSION_SRC_CHUNKS,
+        candidate_k=config.FUSION_SRC_CHUNKS * 3,
+        chunk_k=config.FUSION_SRC_CHUNKS,
         time_delta=delta,
         now=now,
-        chunk_k=config.FUSION_SRC_CHUNKS,
-        model=model,
-        topic=-100)
+        model=model
+    )
     retriever = RAGFusionRetriever(rewrite_llm=get_rewrite_llm(),
                                    base_retriever=retriever, queries=[query] + list(augmented_queries))
     qa_agg_chain = topic_aggregate_chain(plan_llm, retriever)

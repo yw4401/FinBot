@@ -10,7 +10,10 @@ from typing import (
     Optional,
     Tuple,
 )
-from sentence_transformers import SentenceTransformer
+
+import numpy as np
+import spacy
+from elasticsearch import Elasticsearch
 from langchain.callbacks.base import Callbacks
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.chains import RetrievalQA
@@ -18,9 +21,11 @@ from langchain.chains.retrieval_qa.base import BaseRetrievalQA
 from langchain.docstore.document import Document
 from langchain.prompts import PromptTemplate
 from langchain.schema import BaseRetriever
+from langchain.schema.embeddings import Embeddings
 from langchain.vectorstores import ElasticsearchStore
+from langchain.vectorstores.utils import maximal_marginal_relevance
 from pydantic import BaseModel, Field
-from elasticsearch import AsyncElasticsearch
+from spacy.tokens import Doc
 
 try:
     import config
@@ -126,17 +131,21 @@ class ArticleChunkHybridRetriever(BaseRetriever):
     """
 
     #: the asynchronous elastic search client
-    elastic_client: AsyncElasticsearch
+    elastic_client: Elasticsearch
+    #: spacy pipeline
+    spacy_nlp: spacy.pipeline.pipe
     #: sentence transformer
-    encoder: SentenceTransformer
+    encoder: Embeddings
     #: index name
     index_name: str = "articles"
     #: the chunk field
     page_content: str = "chunk_text"
     #: text fields to query
-    text_fields: List[str] = ["chunk_text", "metadata.title", "metadata.entities"]
+    text_fields: List[str] = ["chunk_text", "topic_text", "metadata.title", "metadata.entities"]
     #: vector fields to query
-    vector_fields: List[str] = ["chunk_text_embedding"]
+    vector_field: str = "chunk_text_embedding"
+    #: mmr lambda
+    mmr_lambda = 0.8
     #: the number of chunks to fetch for MMR
     fetch_k: int = 50
     #: the number of candidates to filter
@@ -144,7 +153,7 @@ class ArticleChunkHybridRetriever(BaseRetriever):
     #: the number of article chunks to retrieve from each topic
     chunk_k: int = config.ARTICLE_K
     #: the topic to retrieve from
-    topic: int = -10
+    topic: int = -100
     #: a datetime.timedelta representing how far back to go
     time_delta: datetime.timedelta
     #: the current time
@@ -152,19 +161,43 @@ class ArticleChunkHybridRetriever(BaseRetriever):
     #: the topic model id
     model: str
     #: RRF Constant
-    rrf_k: int = 60
+    rrf_k: int = 20
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        pass
+        results = self.max_marginal_relevance_search(query)
+        for doc in results:
+            publish_str = f"Published: {doc.metadata['published_at']}"
+            doc.page_content = publish_str + "\n" + doc.page_content.strip()
+        return results
 
-    async def _search(self, query: Optional[str] = None) -> List[Tuple[Document, float]]:
-        fields = ["metadata", self.page_content]
-        embeddings = await asyncio.get_event_loop().run_in_executor(None, self.encoder.encode, [query])
-        embeddings = embeddings[0]
+    def max_marginal_relevance_search(self, query: str) -> List[Document]:
+        # Embed the query
+        query_embedding = self.encoder.embed_query(query)
+
+        # Fetch the initial documents
+        got_docs = self._search(
+            query=query,
+            query_vec=query_embedding
+        )
+
+        # Get the embeddings for the fetched documents
+        got_embeddings = [doc.metadata[self.vector_field] for doc, _ in got_docs]
+
+        # Select documents using maximal marginal relevance
+        selected_indices = maximal_marginal_relevance(
+            np.array(query_embedding), got_embeddings, lambda_mult=self.mmr_lambda, k=self.chunk_k
+        )
+        selected_docs = [got_docs[i][0] for i in selected_indices]
+
+        return selected_docs
+
+    def _search(self, query: str, query_vec: List[float]) -> List[Tuple[Document, float]]:
+        fields = ["metadata", self.vector_field, self.page_content]
         # Perform the hybrid search on the Elasticsearch index and return the results.
-        response = await self.elastic_client.search(
+        response = self.elastic_client.search(
             index=self.index_name,
-            **self._build_query(query_vector=embeddings, query_text=query, vector_query_fields=self.vector_fields,
+            **self._build_query(query_vector=query_vec, query_text=query,
+                                vector_query_field=self.vector_field,
                                 text_fields=self.text_fields),
             size=self.fetch_k,
             source=fields,
@@ -198,11 +231,16 @@ class ArticleChunkHybridRetriever(BaseRetriever):
             search_args.append({"term": {"metadata.topic": self.topic}})
         return search_args
 
-    def _build_query_subquery(self, field, text):
+    def _build_text_query(self, field, text):
+        text_doc: Doc = self.spacy_nlp(text)
+        keywords = []
+        for ent in text_doc.ents:
+            keywords.append(ent.text.strip())
+
         return {
             "query": {
                 "match": {
-                    field: text
+                    field: " ".join(keywords)
                 },
                 "filter": self._build_filter()
             }
@@ -210,31 +248,29 @@ class ArticleChunkHybridRetriever(BaseRetriever):
 
     def _build_knn_subquery(self, field, vector):
         return {
-            "knn": {
-                {
-                    "filter": self._build_filter(),
-                    "field": field,
-                    "query_vector": vector,
-                    "k": self.fetch_k,
-                    "num_candidates": self.candidate_k,
-                }
-            }
+            "filter": self._build_filter(),
+            "field": field,
+            "query_vector": vector,
+            "k": self.fetch_k,
+            "num_candidates": self.candidate_k,
         }
 
     def _build_query(
             self,
             query_vector: List[float],
             query_text: str,
-            vector_query_fields: List[str],
+            vector_query_field: str,
             text_fields: List[str],
     ) -> Dict:
-        sub_searches = []
-        for q in text_fields:
-            sub_searches.append(self._build_query_subquery(q, query_text))
-        for q in vector_query_fields:
-            sub_searches.append(self._build_knn_subquery(q, query_vector))
         return {
-            "sub_searches": sub_searches,
+            "query": {
+                "multi_match": {
+                    "query": query_text,
+                    "type": "best_fields",
+                    "fields": text_fields
+                }
+            },
+            "knn": self._build_knn_subquery(vector_query_field, query_vector),
             "rank": {
                 "rrf": {
                     "window_size": self.fetch_k,
@@ -266,7 +302,8 @@ class RAGFusionRetriever(BaseRetriever):
         return [d for _, d in sorted(ranked, key=lambda x: x[0])[:self.top]]
 
     async def aget_relevant_documents(self, query: str, *, callbacks: Callbacks = None, tags: Optional[
-        List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None, **kwargs: Any):
+        List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None,
+                                      **kwargs: Any):
         results = {}
         rankers = []
         query_coros = []
@@ -296,7 +333,8 @@ class RAGFusionRetriever(BaseRetriever):
 
         return rank_function
 
-    def _rrf(self, rankers: List[Callable], documents: Iterable[Document], boosted=0) -> List[Tuple[float, Document]]:
+    def _rrf(self, rankers: List[Callable], documents: Iterable[Document], boosted=0) -> List[
+        Tuple[float, Document]]:
         results = []
         for doc in documents:
             weights = []

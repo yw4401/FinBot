@@ -61,7 +61,7 @@ REWRITE_USER_PROMPT = ("Rephrase the following query as a question such that it 
                        "the conversation so far. The rephrased version should capture the intent of the query while "
                        "being self-contained with respect to context:\n{query}")
 FUSION_CHUNKS = 7
-FUSION_SRC_CHUNKS = 100
+FUSION_SRC_CHUNKS = 50
 
 # Article Summary Response
 TOPIC_SUM_K = 5
