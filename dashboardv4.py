@@ -52,8 +52,13 @@ def display_summary_response(response):
         st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
-    valid_summaries = [summary for summary in response["summaries"] if
-                       "impossible to answer" not in summary["title"].lower()]
+    valid_summaries = []
+    for summary in response["summaries"]:
+        if "impossible" in summary["title"].lower():
+            continue
+        if len(summary["sources"]) == 0:
+            continue
+        valid_summaries.append(summary)
     if len(valid_summaries) > 0:
         st.write("### Related to Your Query")
     for summary in valid_summaries:
