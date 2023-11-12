@@ -10,6 +10,23 @@ import summarizer.uiinterface as ui
 if "history" not in st.session_state:
     st.session_state["history"] = []
 
+kpi_map = {
+    "marketCap": "Market Cap($)",
+    "enterpriseValue": "Total Enterprise Value (TEV)($)",
+    "totalRevenue": "Total Revenues($)",
+    "grossMargins": "Gross Profit Margin(%)",
+    "ebitdaMargins": "EBITDA Margin(%)",
+    "operatingMargin": "Operating Margin(%)",
+    "netProfitMargin": "Net Profit Margin(%)",
+    "profitMargins": "Pre-Tax Profit Margin(%)",
+    "revenuePerShare": "Revenue per Share($)",
+    "trailingEps": "EPS Diluted($)",
+    "enterpriseToRevenue": "EV/Sales",
+    "trailingPE": "P/E",
+    "enterpriseToEbitda": "EV/EBITDA",
+    "priceToBook": "P/B"
+}
+
 
 def format_sources(sources):
     existing_sources = set()
@@ -32,6 +49,10 @@ def display_summary_response(response):
         with st.expander("Sources"):
             format_sources(response["qa"]["sources"])
             st.write("")
+        with st.expander("Chunks"):
+            for doc in response["qa"]["sources"]:
+                st.write(escape_markdown(ui.tex_escape(doc.page_content)))
+                st.write("")
         st.write("")  # Add an empty line for separation
 
     # Loop through each summary and display its title and keypoints
@@ -85,7 +106,7 @@ def plot_data(data, ticker_symbol, summary, kpis):
 
         for key, value in metrics.items():
             # Append each KPI to the table markdown string
-            table_md += f"| {key} | {value if value else 'N/A'} |\n"
+            table_md += f"| {kpi_map[key]} | {value if value else 'N/A'} |\n"
 
         # Display the markdown table
         st.write(table_md)

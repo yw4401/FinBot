@@ -12,7 +12,10 @@ from sklearn.metrics import precision_recall_fscore_support
 from transformers import (
     LlamaTokenizer, StoppingCriteria, )
 
-import config
+try:
+    import config
+except ModuleNotFoundError:
+    import finetune.config as config
 
 
 class ListDataset(torch.utils.data.Dataset):
@@ -197,13 +200,20 @@ def create_summarization_metrics(tokenizer, begin_resp):
 
     def clean_sentence(sentence):
         nltk_words = nltk.word_tokenize(sentence)
-        lem_words = [lemmatizer.lemmatize(w) for w in nltk_words if w not in stop_words]
+        nltk_words = [''.join(x for x in w if x.isalpha()) for w in nltk_words]
+        lem_words = [lemmatizer.lemmatize(w) for w in nltk_words if w not in stop_words and len(w.strip()) > 0]
         return " ".join(lem_words)
+
+    def clean_sentences(sentences):
+        result = []
+        for s in sentences:
+            result.append(clean_sentence(s))
+        return result
 
     def compute_rouge_metrics(labels, predicted):
         # Rouge expects a newline after each sentence
-        decoded_preds = ["\n".join(clean_sentence(nltk.sent_tokenize(pred))) for pred in labels]
-        decoded_labels = ["\n".join(clean_sentence(nltk.sent_tokenize(label))) for label in predicted]
+        decoded_labels = ["\n".join(clean_sentences(nltk.sent_tokenize(label.lower()))) for label in labels]
+        decoded_preds = ["\n".join(clean_sentences(nltk.sent_tokenize(pred.lower()))) for pred in predicted]
 
         # Note that other metrics may not have a `use_aggregator` parameter
         # and thus will return a list, computing a metric for each sentence.

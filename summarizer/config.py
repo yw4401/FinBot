@@ -57,8 +57,9 @@ FUSION_SYSTEM_PROMPT = (
     "preserves the same intent. Follow the following format: {format_instructions}")
 FUSION_USER_PROMPT = "Query: {query}"
 REWRITE_SYSTEM_PROMPT = "You are a helpful AI assistant."
-REWRITE_USER_PROMPT = ("Rephrase the following text as a formal question so that it can be understood without reading "
-                       "the conversation so far: {query}")
+REWRITE_USER_PROMPT = ("Rephrase the following query as a question such that it can be understood without reading "
+                       "the conversation so far. The rephrased version should capture the intent of the query while "
+                       "being self-contained with respect to context:\n{query}")
 FUSION_CHUNKS = 7
 FUSION_SRC_CHUNKS = 100
 
@@ -105,7 +106,7 @@ KPI_PROMPT = ("You are a helpful AI assistant that will identify the top relevan
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
-QA_MODEL = "openai"
+QA_MODEL = "vertexai"
 SUM_MODEL = "openai"
 NER_MODEL = "vertexai"
 KPI_MODEL = "vertexai"

@@ -102,19 +102,28 @@ async def extract_relevant_field(query, response, info):
     :param info: a dict containing the KPIs
     :returns: RelevantKPI containing the relevant KPI groups
     """
-    llm = get_kpi_llm()
-    chain = build_kpi_extraction_chain(llm)
-    kpi_str = ""
-    for k, v in info.items():
-        try:
-            kpi_str = f"{kpi_str}\n{k}: {float(v)}"
-        except (ValueError, TypeError):
-            pass
+    # llm = get_kpi_llm()
+    # chain = build_kpi_extraction_chain(llm)
+    # kpi_str = ""
+    # for k, v in info.items():
+    #     try:
+    #         kpi_str = f"{kpi_str}\n{k}: {float(v)}"
+    #     except (ValueError, TypeError):
+    #         pass
+    #
+    # try:
+    #     return await chain.arun({"query": query, "response": response, "kpi": kpi_str.strip()})
+    # except Exception:
+    #     return RelevantKPI(relevance="None", groups=[])
 
-    try:
-        return await chain.arun({"query": query, "response": response, "kpi": kpi_str.strip()})
-    except Exception:
-        return RelevantKPI(relevance="None", groups=[])
+    basic_group = KPIGroup(group_title="Basic", group_members=["marketCap", "enterpriseValue", "totalRevenue"])
+    profitability_group = KPIGroup(group_title="Profitability", group_members=["grossMargins", "ebitdaMargins",
+                                                                               "operatingMargin", "netProfitMargin",
+                                                                               "profitMargins", "enterpriseToRevenue",
+                                                                               "enterpriseToEbitda"])
+    per_share_group = KPIGroup(group_title="Shares", group_members=["revenuePerShare", "trailingEps",
+                                                                    "trailingPE", "priceToBook"])
+    return RelevantKPI(relevance="Hand Picked", group_members=[basic_group, profitability_group, per_share_group])
 
 
 def extract_industry(text):

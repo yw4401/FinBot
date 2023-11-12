@@ -1,19 +1,26 @@
 import asyncio
 import datetime
 import re
-from typing import Any, List, Optional, Dict, Iterable, Callable, Tuple
-
-from joblib import Parallel, delayed
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+)
+from sentence_transformers import SentenceTransformer
 from langchain.callbacks.base import Callbacks
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.chains import RetrievalQA
 from langchain.chains.retrieval_qa.base import BaseRetrievalQA
-from langchain.llms import BaseLLM
-from langchain.output_parsers import PydanticOutputParser
+from langchain.docstore.document import Document
 from langchain.prompts import PromptTemplate
-from langchain.schema import Document, BaseRetriever
+from langchain.schema import BaseRetriever
 from langchain.vectorstores import ElasticsearchStore
 from pydantic import BaseModel, Field
+from elasticsearch import AsyncElasticsearch
 
 try:
     import config
@@ -66,61 +73,6 @@ def find_top_topics(vector_db, query, now, delta, model, k=5):
     return vector_db.asimilarity_search(query, k=k, filter=search_args)
 
 
-class ElasticSearchTopicRetriever(BaseRetriever):
-    """
-    A LangChain retriever that retrieves article chunks from
-    """
-
-    #: the ElasticsearchStore for the article chunks
-    chunks_elasticstore: ElasticsearchStore
-    #: the number of article chunks to retrieve from each topic
-    chunk_k: int = config.ARTICLE_K
-    #: the relevant topics
-    topics: List[int]
-    #: a datetime.timedelta representing how far back to go
-    time_delta: datetime.timedelta
-    #: the current time
-    now: datetime.datetime
-    #: the topic model id
-    model: str
-
-    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        parallel = Parallel(n_jobs=len(self.topics), backend="threading", return_as="generator")
-        result = []
-        for chunk in parallel(delayed(self._get_relevant_chunks)(t, query) for t in self.topics):
-            chunk.page_content = chunk.page_content.strip()
-            result.extend(chunk)
-        return result
-
-    async def aget_relevant_documents(self, query: str, *, callbacks: Callbacks = None, tags: Optional[
-        List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None, **kwargs: Any):
-        coros = []
-        start_date = self.now - self.time_delta
-        for t in self.topics:
-            search_args = [{"term": {"metadata.topic": t}}, {"term": {"metadata.model": self.model}},
-                           {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
-            coro = self.chunks_elasticstore.amax_marginal_relevance_search(query=query, k=self.chunk_k,
-                                                                           filter=search_args)
-            coros.append(coro)
-        result = []
-        for r in await asyncio.gather(*coros):
-            for c in r:
-                c.page_content = c.page_content.strip()
-                result.append(c)
-        return result
-
-    def _get_relevant_chunks(self, topic_num, query):
-        """
-        Helper method for getting the chunks for the synchronize _get_relevant_documents.
-        """
-        start_date = self.now - self.time_delta
-        search_args = [{"term": {"metadata.topic": topic_num}}, {"term": {"metadata.model": self.model}},
-                       {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
-        chunk_results = self.chunks_elasticstore.max_marginal_relevance_search(query=query, k=self.chunk_k,
-                                                                               filter=search_args)
-        return chunk_results
-
-
 class ArticleChunkRetriever(BaseRetriever):
     """
     A LangChain retriever that retrieves article chunks from elastic search, and then augment it in a format that
@@ -166,6 +118,130 @@ class ArticleChunkRetriever(BaseRetriever):
             publish_str = f"Published: {doc.metadata['published_at']}"
             doc.page_content = publish_str + "\n" + doc.page_content.strip()
         return results
+
+
+class ArticleChunkHybridRetriever(BaseRetriever):
+    """
+    A retriever that uses all available fields in the article index to query for chunks
+    """
+
+    #: the asynchronous elastic search client
+    elastic_client: AsyncElasticsearch
+    #: sentence transformer
+    encoder: SentenceTransformer
+    #: index name
+    index_name: str = "articles"
+    #: the chunk field
+    page_content: str = "chunk_text"
+    #: text fields to query
+    text_fields: List[str] = ["chunk_text", "metadata.title", "metadata.entities"]
+    #: vector fields to query
+    vector_fields: List[str] = ["chunk_text_embedding"]
+    #: the number of chunks to fetch for MMR
+    fetch_k: int = 50
+    #: the number of candidates to filter
+    candidate_k: int = 200
+    #: the number of article chunks to retrieve from each topic
+    chunk_k: int = config.ARTICLE_K
+    #: the topic to retrieve from
+    topic: int = -10
+    #: a datetime.timedelta representing how far back to go
+    time_delta: datetime.timedelta
+    #: the current time
+    now: datetime.datetime
+    #: the topic model id
+    model: str
+    #: RRF Constant
+    rrf_k: int = 60
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
+        pass
+
+    async def _search(self, query: Optional[str] = None) -> List[Tuple[Document, float]]:
+        fields = ["metadata", self.page_content]
+        embeddings = await asyncio.get_event_loop().run_in_executor(None, self.encoder.encode, [query])
+        embeddings = embeddings[0]
+        # Perform the hybrid search on the Elasticsearch index and return the results.
+        response = await self.elastic_client.search(
+            index=self.index_name,
+            **self._build_query(query_vector=embeddings, query_text=query, vector_query_fields=self.vector_fields,
+                                text_fields=self.text_fields),
+            size=self.fetch_k,
+            source=fields,
+        )
+
+        docs_and_scores = []
+        for hit in response["hits"]["hits"]:
+            for field in fields:
+                if field in hit["_source"] and field not in [
+                    "metadata",
+                    self.page_content,
+                ]:
+                    hit["_source"]["metadata"][field] = hit["_source"][field]
+
+            docs_and_scores.append(
+                (
+                    Document(
+                        page_content=hit["_source"].get(self.page_content, ""),
+                        metadata=hit["_source"]["metadata"],
+                    ),
+                    hit["_score"],
+                )
+            )
+        return docs_and_scores
+
+    def _build_filter(self):
+        start_date = self.now - self.time_delta
+        search_args = [{"term": {"metadata.model": self.model}},
+                       {"range": {"metadata.published_at": {"gt": start_date.strftime("%Y-%m-%d")}}}]
+        if self.topic >= -1:
+            search_args.append({"term": {"metadata.topic": self.topic}})
+        return search_args
+
+    def _build_query_subquery(self, field, text):
+        return {
+            "query": {
+                "match": {
+                    field: text
+                },
+                "filter": self._build_filter()
+            }
+        }
+
+    def _build_knn_subquery(self, field, vector):
+        return {
+            "knn": {
+                {
+                    "filter": self._build_filter(),
+                    "field": field,
+                    "query_vector": vector,
+                    "k": self.fetch_k,
+                    "num_candidates": self.candidate_k,
+                }
+            }
+        }
+
+    def _build_query(
+            self,
+            query_vector: List[float],
+            query_text: str,
+            vector_query_fields: List[str],
+            text_fields: List[str],
+    ) -> Dict:
+        sub_searches = []
+        for q in text_fields:
+            sub_searches.append(self._build_query_subquery(q, query_text))
+        for q in vector_query_fields:
+            sub_searches.append(self._build_knn_subquery(q, query_vector))
+        return {
+            "sub_searches": sub_searches,
+            "rank": {
+                "rrf": {
+                    "window_size": self.fetch_k,
+                    "rank_constant": self.rrf_k
+                }
+            }
+        }
 
 
 class RAGFusionRetriever(BaseRetriever):
