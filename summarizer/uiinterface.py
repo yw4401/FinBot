@@ -4,20 +4,26 @@ import re
 import urllib
 import urllib.parse
 from contextlib import closing
+from typing import List
 
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
 import httpx
 import streamlit as st
+from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.llms import OpenAI, VertexAI
+from langchain.output_parsers import PydanticOutputParser, NumberedListOutputParser
+from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate, \
+    ChatPromptTemplate
+from langchain.schema import HumanMessage, AIMessage
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
 from pstock import Bars
 
 import summarizer.config as config
 import summarizer.ner as ner
-from summarizer.topic_sum import ElasticSearchTopicRetriever, topic_aggregate_chain, aget_summaries, afind_top_topics, \
-    RAGFusionRetriever, ArticleChunkRetriever
+from summarizer.topic_sum import topic_aggregate_chain, aget_summaries, afind_top_topics, \
+    RAGFusionRetriever, ArticleChunkRetriever, ContextFusionQuery
 
 with open(config.ES_KEY_PATH, "r") as fp:
     es_key = fp.read().strip()
@@ -305,7 +311,7 @@ def get_summary_llm(kind=config.SUM_MODEL, max_token=256):
         raise NotImplemented()
 
 
-def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=512):
+def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=1024):
     """
     Gets a langchain LLM for injecting context into query.
 
@@ -313,10 +319,10 @@ def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=512):
     :param max_token: the maximum number of tokens that can be emitted.
     """
     if kind == "vertexai":
-        plan_llm = VertexAI(
+        plan_llm = ChatVertexAI(
             project=config.GCP_PROJECT,
             temperature=0,
-            model_name="text-bison",
+            model_name="chat-bison",
             max_output_tokens=max_token
         )
         return plan_llm
@@ -324,24 +330,22 @@ def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=512):
         with open(config.OPENAI_API) as fp:
             key = fp.read().strip()
 
-        plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=key,
-                          temperature=0, max_tokens=max_token)
+        plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key,
+                              temperature=0, max_tokens=max_token)
         return plan_llm
     else:
         raise NotImplemented()
 
 
-async def answer_question(query, now, delta, model, topics, prev_query="", prev_response=""):
+async def answer_question(query, now, delta, model, augmented_queries):
     """
     Creates an async task to answer the user's query for a set of topics
 
     :param query: the user query
-    :param prev_query: the previous user query
-    :param prev_response: the previous user response
+    :param augmented_queries: rag fusion augmented queries
     :param now: the current time
     :param delta: the timedelta for how far back to go
     :param model: the topic model number
-    :param topics: the relevant topics to use
     """
 
     plan_llm = get_qa_llm()
@@ -349,11 +353,11 @@ async def answer_question(query, now, delta, model, topics, prev_query="", prev_
         chunks_elasticstore=get_article_store(),
         time_delta=delta,
         now=now,
+        chunk_k=config.FUSION_SRC_CHUNKS,
         model=model,
-        topic=-1)
+        topic=-100)
     retriever = RAGFusionRetriever(rewrite_llm=get_rewrite_llm(),
-                                   base_retriever=retriever,
-                                   prev_query=prev_query, prev_response=prev_response)
+                                   base_retriever=retriever, queries=[query] + list(augmented_queries))
     qa_agg_chain = topic_aggregate_chain(plan_llm, retriever)
     qa_result = await qa_agg_chain.acall(query)
     return {
@@ -377,13 +381,12 @@ def find_summaries(query, topics, model, now, delta):
     return aget_summaries(query, topics, now, delta, model, get_article_store(), plan_llm)
 
 
-async def get_qa_result(query, now, delta, model, prev_query="", prev_response=""):
+async def get_qa_result(query, now, delta, model, queries):
     """
     async function for concurrently generating the qa response, and also the key-point summaries
 
     :param query: the user query string
-    :param prev_query: the previous user query
-    :param prev_response: the previous response
+    :param queries: the fusion rag augmented queries
     :param now: the current time
     :param delta: the timedelta for how far back to go
     :param model: the topic model number
@@ -393,7 +396,7 @@ async def get_qa_result(query, now, delta, model, prev_query="", prev_response="
 
     topic_results = await afind_top_topics(get_topic_store(), query, now, delta, model, k=config.TOPIC_SUM_K)
     topic_nums = [topic.metadata["topic"] for topic in topic_results]
-    qa_coro = asyncio.ensure_future(answer_question(query, now, delta, model, topic_nums[:config.TOPIC_K]))
+    qa_coro = asyncio.ensure_future(answer_question(query, now, delta, model, queries))
     sum_coro = asyncio.ensure_future(find_summaries(query, topic_nums, model, now, delta))
 
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)
@@ -413,6 +416,40 @@ period_map = {
 }
 
 
+def get_fusion_chain(history, k=3):
+    output_parser = NumberedListOutputParser()
+    rewrite_system = SystemMessagePromptTemplate.from_template(config.REWRITE_SYSTEM_PROMPT)
+    rewrite_user = HumanMessagePromptTemplate.from_template(config.REWRITE_USER_PROMPT)
+    rewrite_history = []
+    for h in history[-k:]:
+        rewrite_history.append(HumanMessage(content=h["user_text"]))
+        rewrite_history.append(AIMessage(content=h["resp_text"]))
+    rewrite_chat = ChatPromptTemplate.from_messages([rewrite_system, *rewrite_history, rewrite_user])
+    fusion_system = SystemMessagePromptTemplate.from_template(config.FUSION_SYSTEM_PROMPT)
+    fusion_user = HumanMessagePromptTemplate.from_template(config.FUSION_USER_PROMPT)
+    fusion_chat = ChatPromptTemplate.from_messages([fusion_system, fusion_user])
+    llm = get_rewrite_llm()
+    return rewrite_chat | llm, fusion_chat.partial(
+        format_instructions=output_parser.get_format_instructions()) | llm | output_parser
+
+
+async def augment_query(text, history):
+    queries = []
+    try:
+        rewrite_chain, fusion_chain = get_fusion_chain(history)
+        if len(history) > 0:
+            rewritten_query = await rewrite_chain.ainvoke({"query": text})
+        else:
+            rewritten_query = AIMessage(content=text)
+        augmented_queries = await fusion_chain.ainvoke({"query": rewritten_query.content})
+        queries.append(rewritten_query.content)
+        queries.extend(augmented_queries)
+    except Exception as e:
+        print(f"Failed to apply fusion rag: {e}")
+        queries.append(text)
+    return queries
+
+
 def finbot_response(text, period, history):
     """
     Gets the qa and summarization result given query and timeframe:
@@ -425,12 +462,9 @@ def finbot_response(text, period, history):
     delta = period_map[period]
     topic_model = get_model_num()
     actual_history = history[:-1]
-    if len(actual_history) != 0:
-        return asyncio.run(get_qa_result(text, now, delta, topic_model,
-                                         prev_query=actual_history[-1]["user_text"],
-                                         prev_response=actual_history[-1]["resp_text"]))
-    else:
-        return asyncio.run(get_qa_result(text, now, delta, topic_model))
+    augmented_queries = asyncio.run(augment_query(text, actual_history))
+    print(augmented_queries)
+    return asyncio.run(get_qa_result(augmented_queries[0], now, delta, topic_model, augmented_queries[1:]))
 
 
 if __name__ == "__main__":

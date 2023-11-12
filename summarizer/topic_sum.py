@@ -132,7 +132,7 @@ class ArticleChunkRetriever(BaseRetriever):
     #: the number of article chunks to retrieve from each topic
     chunk_k: int = config.ARTICLE_K
     #: the topic to retrieve from
-    topic: int
+    topic: int = -10
     #: a datetime.timedelta representing how far back to go
     time_delta: datetime.timedelta
     #: the current time
@@ -143,8 +143,8 @@ class ArticleChunkRetriever(BaseRetriever):
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
         start_date = self.now - self.time_delta
         search_args = [{"term": {"metadata.model": self.model}},
-                       {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
-        if self.topic >= 0:
+                       {"range": {"metadata.published_at": {"gt": start_date.strftime("%Y-%m-%d")}}}]
+        if self.topic >= -1:
             search_args.append({"term": {"metadata.topic": self.topic}})
         results = self.chunks_elasticstore.max_marginal_relevance_search(query=query, k=self.chunk_k,
                                                                          filter=search_args)
@@ -157,8 +157,8 @@ class ArticleChunkRetriever(BaseRetriever):
         List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None, **kwargs: Any):
         start_date = self.now - self.time_delta
         search_args = [{"term": {"metadata.model": self.model}},
-                       {"range": {"metadata.published_at": {"gte": start_date.strftime("%Y-%m-%d")}}}]
-        if self.topic >= 0:
+                       {"range": {"metadata.published_at": {"gt": start_date.strftime("%Y-%m-%d")}}}]
+        if self.topic >= -1:
             search_args.append({"term": {"metadata.topic": self.topic}})
         results = await self.chunks_elasticstore.amax_marginal_relevance_search(query=query, k=self.chunk_k,
                                                                                 filter=search_args)
@@ -169,29 +169,17 @@ class ArticleChunkRetriever(BaseRetriever):
 
 
 class RAGFusionRetriever(BaseRetriever):
-    rewrite_llm: BaseLLM
+    queries: List[str]
     base_retriever: BaseRetriever
-    prev_query: str
-    prev_response: str
     boost: float = 2.0
     default_rank: int = 100
     top: int = config.FUSION_CHUNKS
     k: int = 60
 
     def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> List[Document]:
-        queries = []
-        try:
-            augmented_queries: ContextFusionQuery = self._get_fusion_chain().invoke({"previous_query": self.prev_query,
-                                                                                     "response": self.prev_response,
-                                                                                     "current_query": query})
-            queries.append(augmented_queries.rewritten_query)
-            queries.extend(augmented_queries.alternative_queries)
-        except:
-            queries.append(query)
-
         results = {}
         rankers = []
-        for q in queries:
+        for q in self.queries:
             result = self.base_retriever.get_relevant_documents(q, run_manager=run_manager)
             rankers.append(self._create_rank_function(result))
             for r in result:
@@ -203,38 +191,24 @@ class RAGFusionRetriever(BaseRetriever):
 
     async def aget_relevant_documents(self, query: str, *, callbacks: Callbacks = None, tags: Optional[
         List[str]] = None, metadata: Optional[Dict[str, Any]] = None, run_name: Optional[str] = None, **kwargs: Any):
-        queries = []
-        try:
-            augmented_queries: ContextFusionQuery = await self._get_fusion_chain().ainvoke(
-                {"previous_query": self.prev_query,
-                 "response": self.prev_response,
-                 "current_query": query})
-            queries.append(augmented_queries.rewritten_query)
-            queries.extend(augmented_queries.alternative_queries)
-        except:
-            queries.append(query)
-
         results = {}
         rankers = []
         query_coros = []
-        for q in queries:
+        for q in self.queries:
             query_coros.append(self.base_retriever.aget_relevant_documents(q, callbacks=callbacks, tags=tags,
                                                                            metadata=metadata,
                                                                            run_name=run_name, **kwargs))
         query_coros = await asyncio.gather(*query_coros)
         for result in query_coros:
+            print(f"Got: {len(result)} raw results")
             rankers.append(self._create_rank_function(result))
             for r in result:
                 if r.page_content not in results:
                     results[r.page_content] = r
 
         ranked = self._rrf(rankers, results.values())
+        print(f"Ended with {len(ranked)} RRF fusion results")
         return [d for _, d in sorted(ranked, key=lambda x: x[0])[:self.top]]
-
-    def _get_fusion_chain(self):
-        output_parser = PydanticOutputParser(pydantic_object=ContextFusionQuery)
-        return PromptTemplate.from_template(config.FUSION_PROMPT).partial(
-            format_instructions=output_parser.get_format_instructions()) | self.rewrite_llm | output_parser
 
     def _create_rank_function(self, documents: List[Document]):
         doc_map = {page.page_content: i + 1 for i, page in enumerate(documents)}

@@ -57,7 +57,7 @@ def display_summary_response(response):
     if len(resp_text) == 0:
         st.write("Sorry, we were unable to find anything related to your query.")
 
-    return resp_text
+    return ". ".join(resp_text)
 
 
 def plot_data(data, ticker_symbol, summary, kpis):
@@ -181,6 +181,10 @@ def on_ask_pressed():
             qa_ux(st.session_state["user_query"], st.session_state["time_period"])
 
 
+def clear_history():
+    st.session_state["history"] = []
+
+
 def main():
     st.title("FinBot")
 
@@ -194,6 +198,7 @@ def main():
     st.write("_Always double check the responses for substantial decisions_")
 
     st.button("Ask FinBot", on_click=on_ask_pressed, key="user_asked")
+    st.button("Clear History", on_click=clear_history, key="history_cleaed")
 
 
 if __name__ == "__main__":

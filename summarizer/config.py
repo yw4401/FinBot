@@ -41,25 +41,26 @@ TOPIC_FILTER_FORMAT_USER = "{result}"
 TOPIC_K = 2
 
 # Article QA Response
-ARTICLE_K = 3
+ARTICLE_K = 7
 QA_RESP_PROMPT = (
     "You are an AI assistant that will answer the given question in a concise way from the given context. "
     "You MUST only use the information given in the context, and not your prior knowledge. "
     "The response should be a well written, well formatted single paragraph. "
-    "Do not include any newline or line breaks in the response."
+    "DO NOT assume any facts unless the context explicitly provides it. "
+    "DO NOT assume that the information in the given question is correct. "
     "If you cannot answer the question via the given context, respond with "
     '"Sorry, I cannot answer this question using the articles."\n\nBEGIN CONTEXT:\n{context}\n\n'
     'BEGIN QUESTION:\n{question}')
-FUSION_PROMPT = ("You are an AI assistant that will help with optimizing queries for a retrieval augmented generation "
-                 "system. You will be given a current query, the previous query before the current query, and the "
-                 "previous response associated with the previous query. Then, you will first rewrite the current "
-                 "query based on the previous query and response so that the meaning and intent of the rewritten query "
-                 "does not depend on the previous query and response. Finally, you will also come up with 5 "
-                 "optimized alternative queries with the same intent of the current query but asked in different ways. "
-                 "\n\n{format_instructions}\n\nPrevious Query: {previous_query}\n\nPrevious Response: {response}\n\n"
-                 "Current Query: {current_query}\n\nFollow the instructions in both content and formatting.")
+FUSION_SYSTEM_PROMPT = (
+    "You are a helpful AI assistant that will help with optimizing queries for a retrieval augmented generation "
+    "system. Given a query, you will come up with 5 alternative optimized queries that are written differently but "
+    "preserves the same intent. Follow the following format: {format_instructions}")
+FUSION_USER_PROMPT = "Query: {query}"
+REWRITE_SYSTEM_PROMPT = "You are a helpful AI assistant."
+REWRITE_USER_PROMPT = ("Rephrase the following text as a formal question so that it can be understood without reading "
+                       "the conversation so far: {query}")
 FUSION_CHUNKS = 7
-
+FUSION_SRC_CHUNKS = 100
 
 # Article Summary Response
 TOPIC_SUM_K = 5
@@ -100,23 +101,12 @@ KPI_PROMPT = ("You are a helpful AI assistant that will identify the top relevan
               "appropriate title with appropriate capitalization.\n"
               "KPIs: {kpi}\n\nCompany: {response}\n\nQuery: {query}\n\n"
               "{format_instructions}")
-REWRITE_PROMPT = ("You are a helpful AI assistant that will rewrite a current query that depends on "
-                  "a previous query and response so that the current query can be understood "
-                  "without referring to the previous query and response. If the meaning of the current query does not "
-                  "depend on the previous query and response, then repeat the content of the current query.\n\n"
-                  "Examples:\n"
-                  "Previous Query: What is the new LLM from OpenAI?\n\n"
-                  "Response: GPT-4\n\n"
-                  "Current Query: What does it do?\n"
-                  "Re-written Version: What does GPT-4, the new LLM from OpenAI do?\n\nFollow the example, and begin.\n\n"
-                  "Previous Query: {prev_query}\n\nResponse:\n{response}\n\n"
-                  "Current Query: {current_query}")
 
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
 QA_MODEL = "openai"
 SUM_MODEL = "openai"
-NER_MODEL = "openai"
-KPI_MODEL = "openai"
+NER_MODEL = "vertexai"
+KPI_MODEL = "vertexai"
 REWRITE_MODEL = "openai"
