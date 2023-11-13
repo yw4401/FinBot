@@ -4,10 +4,12 @@ import re
 import urllib
 import urllib.parse
 from contextlib import closing
+from typing import List
 
 import google.cloud.bigquery as bq
 import google.cloud.bigquery.dbapi as bqapi
 import httpx
+import nltk
 import spacy
 import streamlit as st
 from elasticsearch import Elasticsearch
@@ -19,6 +21,8 @@ from langchain.prompts import SystemMessagePromptTemplate, HumanMessagePromptTem
     ChatPromptTemplate
 from langchain.schema import HumanMessage, AIMessage
 from langchain.vectorstores.elasticsearch import ElasticsearchStore
+from nltk import WordNetLemmatizer, PorterStemmer
+from nltk.corpus import stopwords
 from pstock import Bars
 
 import summarizer.config as config
@@ -240,6 +244,17 @@ def get_model_num():
                 return cursor.fetchone()[0]
 
 
+@st.cache_resource
+def setup_nltk():
+    nltk.download("punkt")
+    nltk.download('wordnet')
+    nltk.download('stopwords')
+    lemmatizer = WordNetLemmatizer()
+    stemmer = PorterStemmer()
+    stop_words = set([w.lower() for w in stopwords.words("english")])
+    return stemmer, lemmatizer, {s.lower() for s in stop_words}
+
+
 def tex_escape(text):
     """
         :param text: a plain text message
@@ -386,7 +401,22 @@ async def answer_question(query, now, delta, model, augmented_queries):
     }
 
 
-def find_summaries(query, topics, model, now, delta):
+def determine_relevant_keypoints(query: str, key_points: List[str]):
+    stem, lemma, stop = setup_nltk()
+    query_words = nltk.word_tokenize(query)
+    query_words = [w.lower() for w in query_words if w not in stop and w.isalpha()]
+    query_words = {stem.stem(lemma.lemmatize(w)) for w in query_words}
+    key_points_tokens = set()
+    for s in key_points:
+        key_words = nltk.word_tokenize(s)
+        key_words = [w.lower() for w in key_words if w not in stop and w.isalpha()]
+        key_words = {stem.stem(lemma.lemmatize(w)) for w in key_words}
+        key_points_tokens.update(key_words)
+    jaccard = len(query_words.intersection(key_points_tokens)) / len(query_words.union(key_points_tokens))
+    return jaccard
+
+
+async def find_summaries(query, topics, model, now, delta):
     """
     Creates an async corotine for generating the key point summaries.
 
@@ -398,7 +428,8 @@ def find_summaries(query, topics, model, now, delta):
     """
 
     plan_llm = get_summary_llm()
-    return aget_summaries(query, topics, now, delta, model, get_article_store(), plan_llm)
+    summaries = await aget_summaries(query, topics, now, delta, model, get_article_store(), plan_llm)
+    return summaries
 
 
 async def get_qa_result(query, now, delta, model, queries):
@@ -420,20 +451,17 @@ async def get_qa_result(query, now, delta, model, queries):
     sum_coro = asyncio.ensure_future(find_summaries(query, topic_nums, model, now, delta))
 
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)
+    filtered_sums = []
+    for s in summaries:
+        distance = determine_relevant_keypoints(query + ". " + qa_completed["answer"], [s["title"]] + s["keypoints"])
+        print(f"Found distance {distance} for summary {s['title']}")
+        if distance >= 0.02:
+            filtered_sums.append(s)
 
     return {
         "qa": qa_completed,
-        "summaries": summaries
+        "summaries": filtered_sums
     }
-
-
-period_map = {
-    "1d": datetime.timedelta(days=1),
-    "5d": datetime.timedelta(days=5),
-    "1mo": datetime.timedelta(days=30),
-    "3mo": datetime.timedelta(days=91),
-    "6mo": datetime.timedelta(days=183)
-}
 
 
 def get_fusion_chain(history, k=3):
@@ -468,6 +496,15 @@ async def augment_query(text, history):
         print(f"Failed to apply fusion rag: {e}")
         queries.append(text)
     return queries
+
+
+period_map = {
+    "1d": datetime.timedelta(days=1),
+    "5d": datetime.timedelta(days=5),
+    "1mo": datetime.timedelta(days=30),
+    "3mo": datetime.timedelta(days=91),
+    "6mo": datetime.timedelta(days=183)
+}
 
 
 def finbot_response(text, period, history):

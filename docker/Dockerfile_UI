@@ -6,7 +6,7 @@ WORKDIR $APP_HOME
 
 RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 RUN pip install streamlit elasticsearch sentence-transformers langchain tiktoken openai pstock-python httpx
-RUN pip install plotly google-cloud-aiplatform spacy
+RUN pip install plotly google-cloud-aiplatform spacy nltk
 RUN python -m spacy download en_core_web_sm
 
 COPY ./es_id ./es_key $APP_HOME/

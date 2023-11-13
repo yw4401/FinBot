@@ -431,6 +431,7 @@ async def aget_summaries(query, topics, now, delta, topic_model, chunk_db, model
     """
 
     key_chains = [create_keypoints_chain(chunk_db, t, topic_model, model, now, delta, k=chunk_k) for t in topics]
+    print(f"Computing summaries for {len(key_chains)} topics")
     tasks = [c.acall(query) for c in key_chains]
     inter_results = await asyncio.gather(*tasks)
     split_regex = re.compile(r"\n\*")
@@ -438,7 +439,7 @@ async def aget_summaries(query, topics, now, delta, topic_model, chunk_db, model
     results = []
     for r in inter_results:
         result_text = r["result"].strip()
-        if result_text == "IMPOSSIBLE":
+        if "impossible" in result_text.lower():
             continue
         parts = split_regex.split(result_text)
 
