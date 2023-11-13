@@ -182,10 +182,20 @@ The final output to the user consists of three main segments:
 The algorithms for handling output is located in the [summarizer](summarizer) directory.
 
 #### Retrieval
-- A topic based retrieval strategy is used for QA/Summarization.
-- First, the top T relevant topics are found via a semantic similarity search of user query against topic embedding (summary of topics)
-- Then, for each relevant topics, the top K text chunks from the topic is found via a combined score of full text search (entities, raw text, titles) and chunk embeddings (MMR)
-- While searching, the chunks and topics are constrained according to user specified time-frame
+- A hybrid RAG-Fusion approach is used for chunk retrieval
+- First, the user query is augmented with the interaction history with additional similar queries generated via LLM
+- Then, for each query in the query set, the chunks are retrieved from elastic search using a hybrid RRF search
+  - Traditional index keyword search based on the tokenized text fields and query keywords generates the first ranking of documents
+  - The keyword search would be applied to the following field using max aggregation:
+    - The chunk text
+    - The top article titles from the same topic cluster of a given article
+    - The entities extracted from the chunk text
+    - The title of the article
+  - Semantic similarity search via the vector embedding of the query and the chunks forms the second ranking of the documents
+  - The final ranking of the documents would be generated via the RRF method to combine the two individual rankings
+  - While acquiring the chunks, the time period of the source articles are considered
+- Finally, the chunks from each individual query are combined by applying RRF over each ranking of the retrieved chunks based on each query
+- The approach ensembles over various queries, and take into account most if not all of the enrichment's during the ingestion process.
 
 #### Generation
 - A custom fine-tuned summary model on the article summaries is used with the retrieved chunks to generate the key-points summaries

@@ -473,6 +473,7 @@ if __name__ == "__main__":
         fetch_k=config.FUSION_SRC_CHUNKS,
         candidate_k=config.FUSION_SRC_CHUNKS * 3,
         chunk_k=config.FUSION_SRC_CHUNKS,
+        mmr_lambda=0.9,
         time_delta=delta,
         now=now,
         model=model
