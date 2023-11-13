@@ -16,8 +16,8 @@
 
 ## Demo <a name="demo"></a>
 
-https://github.com/yw4401/FinBot/assets/54665534/68cd80b2-e0b9-41ef-9cd8-1f75ae633193
 
+https://github.com/yw4401/FinBot/raw/main/images/Capstone%20demo1113.mp4
 
 ## About FinBot <a name="background"></a>
 
