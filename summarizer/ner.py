@@ -93,7 +93,7 @@ def build_kpi_extraction_chain(llm):
     return llm_chain
 
 
-async def extract_relevant_field(query, response, info):
+def extract_relevant_field(query, response, info):
     """
     identify relevant KPIs in groups based on the query, response, and kpis available from the ticker
 
@@ -123,7 +123,7 @@ async def extract_relevant_field(query, response, info):
                                                                                "enterpriseToEbitda"])
     per_share_group = KPIGroup(group_title="Shares", group_members=["revenuePerShare", "trailingEps",
                                                                     "trailingPE", "priceToBook"])
-    return RelevantKPI(relevance="Hand Picked", group_members=[basic_group, profitability_group, per_share_group])
+    return RelevantKPI(relevance="Hand Picked", groups=[basic_group, profitability_group, per_share_group])
 
 
 def extract_industry(text):

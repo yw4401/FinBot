@@ -152,15 +152,20 @@ async def fetch_yahoo_data(ticker, period):
 
 
 async def fetch_ticker(ticker_symbol, query, period):
+    print(f"Fetching Ticker: {ticker_symbol}")
     info, data = await asyncio.gather(fetch_yahoo_kpi(ticker_symbol), fetch_yahoo_data(ticker_symbol, period))
     summary = info.get('longBusinessSummary', 'No summary available.')
-    kpis = await ner.extract_relevant_field(query, summary, info)
+    print(f"Found summary: {summary}")
+    kpis = ner.extract_relevant_field(query, summary, info)
+    print(f"Found KPI: {kpis}")
     result = {}
     for g in kpis.groups:
         if g.group_title not in result:
             result[g.group_title] = {}
         for m in g.group_members:
+            print("Trying to get KPI: " + m)
             if m in info:
+                print("Adding KPI: " + m)
                 result[g.group_title][m] = info[m]
 
     return ticker_symbol, data, summary, result
