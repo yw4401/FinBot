@@ -12,6 +12,8 @@ FINE_TUNE_TARGET_BUCKET = "scraped-news-article-data-null"
 FINE_TUNE_FILTERED = "fine-tune-filtered.parquet"
 FINE_TUNE_COREF = "fine-tune-coref.parquet"
 FINE_TUNE_FILE_PATTERN = "fine-tune-summary-{split}.parquet"
+FINE_TUNE_QA_COREF = "fine-tune-qa-coref.parquet"
+FINE_TUNE_QA_PATTERN = "fine-tune-qa-{split}.parquet"
 
 # Co-reference Resolution
 ARTICLE_COREF_MOD_URL = "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2021.03.10.tar.gz"
@@ -23,7 +25,7 @@ TOPIC_TTL_DAY = 5
 TOPIC_FIT_RANGE_DAY = int(((30 + 31) / 2) * 6)
 TOPIC_EMBEDDING = "shilongdai/finember"
 TOPIC_UMAP_NEIGHBORS = 15
-TOPIC_UMAP_COMPONENTS = 32
+TOPIC_UMAP_COMPONENTS = 16
 TOPIC_UMAP_MIN_DIST = 0
 TOPIC_UMAP_METRIC = "euclidean"
 TOPIC_HDBSCAN_MIN_SIZE = 5
@@ -260,3 +262,4 @@ SUMMARY_SUMMARY_USER = "{summary}"
 
 # Impossible Case
 SUMMARY_IMPOSSIBLE_RESP = "Impossible to answer with given information"
+QA_IMPOSSIBLE_RESP = "Impossible to answer with given information"

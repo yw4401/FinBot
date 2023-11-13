@@ -139,10 +139,10 @@ def coref_text(article, predictor, nlp):
         return None
 
 
-def add_coreference_resolution(df, predictor, nlp):
+def add_coreference_resolution(df, predictor, nlp, src_col="body"):
     body = []
     with tqdm(total=len(df.index)) as progress:
-        for article in df.body:
+        for article in df[src_col]:
             corref_body = ""
             if article and len(article.strip()) > 0:
                 corref_body = coref_text(article, predictor, nlp)

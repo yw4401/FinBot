@@ -18,7 +18,7 @@ from tqdm import tqdm
 from umap import UMAP
 
 import config
-from pipeline.common import download_blob, upload_blob, BigquerySession
+from common import download_blob, upload_blob, BigquerySession
 from summarize_topics import summarization_wrapper, create_topic_summarizer
 
 

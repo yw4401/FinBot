@@ -316,14 +316,18 @@ def get_random_chunks(body_chunks, amount, idx):
     return result
 
 
-def inject_noise(df: pd.DataFrame, splitter, target_chunks=7, pure_noise=0.1):
+def inject_noise(df: pd.DataFrame, splitter,
+                 target_chunks=7, pure_noise=0.1,
+                 context_col="body", result_col="summary",
+                 impossible_resp=config.SUMMARY_IMPOSSIBLE_RESP,
+                 chunk_processor=create_body_chunks):
     df = df.reset_index(drop=True)
     clean_newline_regex = re.compile(r"\n+")
-    chunks = df.body.progress_apply(splitter.split_text)
+    chunks = df[context_col].progress_apply(splitter.split_text)
     chunks: List[List[str]] = [[clean_newline_regex.sub("\n", c).strip() for c in chunk] for chunk in chunks]
     all_body_chunks = []
     for idx, row in df.iterrows():
-        body_chunks = create_body_chunks(row, chunks[idx])
+        body_chunks = chunk_processor(row, chunks[idx])
         all_body_chunks.append(body_chunks)
 
     # Original articles but with shuffled chunks
@@ -333,7 +337,7 @@ def inject_noise(df: pd.DataFrame, splitter, target_chunks=7, pure_noise=0.1):
         shuffled = list(b)[:target_chunks]
         np.random.shuffle(shuffled)
         og_bodies.append("\n\n".join(shuffled))
-    og_df["body"] = og_bodies
+    og_df[context_col] = og_bodies
 
     # Original articles + random other articles
     augmented_bodies = []
@@ -348,18 +352,18 @@ def inject_noise(df: pd.DataFrame, splitter, target_chunks=7, pure_noise=0.1):
             final_chunks = all_body_chunks[idx] + noise_chunks
             np.random.shuffle(final_chunks)
             augmented_bodies.append("\n\n".join(final_chunks))
-    aug_df["body"] = augmented_bodies
-    aug_df = aug_df.loc[aug_df.body != ""]
+    aug_df[context_col] = augmented_bodies
+    aug_df = aug_df.loc[aug_df[context_col] != ""]
 
     # Pure Noise Chunks
     noise_df = df.sample(frac=pure_noise)
-    noise_df["summary"] = config.SUMMARY_IMPOSSIBLE_RESP
+    noise_df[result_col] = config.SUMMARY_IMPOSSIBLE_RESP
     noise_bodies = []
     for idx, row in noise_df.iterrows():
         chunk_amt = np.random.randint(1, target_chunks + 1)
         rand_chunks = get_random_chunks(all_body_chunks, chunk_amt, idx)
         noise_bodies.append("\n\n".join(rand_chunks))
-    noise_df["body"] = noise_bodies
+    noise_df[context_col] = noise_bodies
 
     return pd.concat([og_df, aug_df, noise_df], ignore_index=True)
 
