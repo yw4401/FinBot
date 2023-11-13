@@ -299,7 +299,7 @@ We fine-tuned the Mistral model using the standard language modeling objective o
 
 The performance comparison after tuning is given below:
 
-![Tuned ROUGE](images/tune_rouge.png)
+![Tuned ROUGE](images/rouge2.png)
 
 ![Tuned Hallucination](images/tune_hal.png)
 

@@ -18,8 +18,12 @@ from langchain.callbacks.base import Callbacks
 from langchain.callbacks.manager import CallbackManagerForRetrieverRun
 from langchain.chains import RetrievalQA
 from langchain.chains.retrieval_qa.base import BaseRetrievalQA
+from langchain.chat_models import ChatVertexAI, ChatOpenAI
 from langchain.docstore.document import Document
-from langchain.prompts import PromptTemplate
+from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.output_parsers import NumberedListOutputParser
+from langchain.prompts import PromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate, \
+    ChatPromptTemplate
 from langchain.schema import BaseRetriever
 from langchain.schema.embeddings import Embeddings
 from langchain.vectorstores import ElasticsearchStore
@@ -447,3 +451,89 @@ async def aget_summaries(query, topics, now, delta, topic_model, chunk_db, model
             break
 
     return results
+
+
+if __name__ == "__main__":
+    with open(config.ES_KEY_PATH, "r") as fp:
+        es_key = fp.read().strip()
+    with open(config.ES_CLOUD_ID_PATH, "r") as fp:
+        es_id = fp.read().strip()
+    elastic_client = Elasticsearch(cloud_id=es_id, api_key=es_key)
+    nlp = spacy.load("en_core_web_sm", enable=["ner"])
+    embedding = SentenceTransformerEmbeddings(model_name=config.FILTER_EMBEDDINGS, model_kwargs={'device': 'cpu'})
+    now = datetime.datetime(year=2023, month=11, day=10)
+    delta = datetime.timedelta(days=999)
+    model = "32f3de19-18ef-4cfe-b65a-b7c13116075d"
+
+    # Plain Elastic Search Retriever
+    hybrid_retriver = ArticleChunkHybridRetriever(
+        elastic_client=elastic_client,
+        spacy_nlp=nlp,
+        encoder=embedding,
+        fetch_k=config.FUSION_SRC_CHUNKS,
+        candidate_k=config.FUSION_SRC_CHUNKS * 3,
+        chunk_k=config.FUSION_SRC_CHUNKS,
+        time_delta=delta,
+        now=now,
+        model=model
+    )
+
+    query = "What are some key developments in AI?"
+    print(f"Query: {query}")
+    docs = hybrid_retriver.get_relevant_documents(query)
+    print("Hybrid Elastic Search:")
+    for d in docs[:config.ARTICLE_K]:
+        print(d.metadata["title"])
+
+
+    # Fusion Retriever
+    def get_rewrite_llm(kind=config.REWRITE_MODEL, max_token=1024):
+        """
+        Gets a langchain LLM for injecting context into query.
+
+        :param kind: the type of model. Currently it supports PaLM2 ("vertexai"), GPT-3.5 ("openai")
+        :param max_token: the maximum number of tokens that can be emitted.
+        """
+        if kind == "vertexai":
+            plan_llm = ChatVertexAI(
+                project=config.GCP_PROJECT,
+                temperature=0,
+                model_name="chat-bison",
+                max_output_tokens=max_token
+            )
+            return plan_llm
+        elif kind == "openai":
+            with open(config.OPENAI_API) as fp:
+                key = fp.read()
+            plan_llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=key,
+                                  temperature=0, max_tokens=max_token)
+            return plan_llm
+        else:
+            raise NotImplemented()
+
+
+    # Set up LangChain
+    output_parser = NumberedListOutputParser()
+    rewrite_system = SystemMessagePromptTemplate.from_template(config.REWRITE_SYSTEM_PROMPT)
+    rewrite_user = HumanMessagePromptTemplate.from_template(config.REWRITE_USER_PROMPT)
+    rewrite_history = []
+    rewrite_chat = ChatPromptTemplate.from_messages([rewrite_system, *rewrite_history, rewrite_user])
+    fusion_system = SystemMessagePromptTemplate.from_template(config.FUSION_SYSTEM_PROMPT)
+    fusion_user = HumanMessagePromptTemplate.from_template(config.FUSION_USER_PROMPT)
+    fusion_chat = ChatPromptTemplate.from_messages([fusion_system, fusion_user])
+    llm = get_rewrite_llm()
+    chain = fusion_chat.partial(
+        format_instructions=output_parser.get_format_instructions()) | llm | output_parser
+
+    # Get Fusion queries
+    print("Fusion Search:")
+    augmented_queries = chain.invoke({"query": query})
+    print(f"Additional Queries: {augmented_queries}")
+
+    fus_retriever = RAGFusionRetriever(rewrite_llm=get_rewrite_llm(),
+                                       base_retriever=hybrid_retriver,
+                                       default_rank=1000,
+                                       queries=[query] + list(augmented_queries))
+    docs = fus_retriever.get_relevant_documents(query)
+    for d in docs:
+        print(d.metadata["title"])
