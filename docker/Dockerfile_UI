@@ -9,7 +9,7 @@ RUN pip install streamlit elasticsearch sentence-transformers langchain tiktoken
 RUN pip install plotly google-cloud-aiplatform spacy nltk
 RUN python -m spacy download en_core_web_sm
 
-COPY ./es_id ./es_key $APP_HOME/
+COPY ./es_id ./es_key ./key $APP_HOME/
 ADD ./summarizer $APP_HOME/summarizer
 COPY ./dashboardv4.py $APP_HOME/
 
