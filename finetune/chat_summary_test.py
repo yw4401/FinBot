@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from typing import cast, Optional
 
 import pandas as pd
-import torch
-import transformers
 from transformers import (
     HfArgumentParser, AutoTokenizer
 )

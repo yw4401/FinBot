@@ -2,27 +2,25 @@ from dataclasses import dataclass, field
 from typing import cast, Optional
 
 import pandas as pd
-import torch
-import transformers
 from transformers import (
     HfArgumentParser, AutoTokenizer
 )
 from vllm import SamplingParams, LLM
 
 import config
-from common import format_llama_sum_user, truncate_summary_example_chat
+from common import format_llama_qa_user, truncate_qa_example_chat
 
 
 @dataclass
 class ScriptArguments:
-    model_path: Optional[str] = field(default="databricks/dolly-v2-3b")
+    model_path: Optional[str] = field(default="Open-Orca/Mistral-7B-OpenOrca")
     template_path: Optional[str] = field(default=None)
-    output_name: Optional[str] = field(default="dolly-sum")
-    dataset_path: Optional[str] = field(default="./fine-tune-summary-test.parquet")
+    output_name: Optional[str] = field(default="orca-mistral")
+    dataset_path: Optional[str] = field(default="./fine-tune-qa-test.parquet")
     token_path: Optional[str] = field(default="./hf_token")
     dtype: Optional[str] = field(default="float16")
-    world_size: Optional[int] = field(default=1)
-    max_input_length: Optional[int] = field(default=2048 - 256)
+    world_size: Optional[int] = field(default=2)
+    max_input_length: Optional[int] = field(default=4096 - 256)
     max_new_tokens: Optional[int] = field(default=256)
     temperature: Optional[float] = field(default=0)
     stop_criteria: Optional[str] = field(default=None)
@@ -30,9 +28,9 @@ class ScriptArguments:
 
 
 def prepare_conversation(row, tokenizer, chat_template=None):
-    conversation = [{"role": "system", "content": config.LLAMA_SUMMARY_BULLET_INSTRUCTION},
-                    {"role": "user", "content": format_llama_sum_user(question=row["question"],
-                                                                      body=row["body"])}]
+    conversation = [{"role": "system", "content": config.LLAMA_QA_SYSTEM_INSTRUCTION},
+                    {"role": "user", "content": format_llama_qa_user(dict(question=row["question"],
+                                                                          context=row["body"]))}]
     chat_form = tokenizer.apply_chat_template(conversation, chat_template=chat_template,
                                               tokenize=False, add_generation_prompt=True)
     return chat_form
@@ -62,13 +60,14 @@ if __name__ == "__main__":
               tensor_parallel_size=script_args.world_size)
 
     test_df["body"] = test_df.apply(
-        lambda row: truncate_summary_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
-                                                  question=row["question"],
-                                                  body=row["body"],
-                                                  summary=row["summary"],
-                                                  tokenizer=tokenizer,
-                                                  max_context=script_args.max_input_length), axis=1)
-    raw_inputs = test_df.apply(lambda row: prepare_conversation(row, tokenizer, chat_template=template), axis=1).tolist()
+        lambda row: truncate_qa_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
+                                             question=row["question"],
+                                             context=row["body"],
+                                             answer=row["summary"],
+                                             tokenizer=tokenizer,
+                                             max_context=script_args.max_input_length), axis=1)
+    raw_inputs = test_df.apply(lambda row: prepare_conversation(row, tokenizer, chat_template=template),
+                               axis=1).tolist()
     results = []
     for i, output in enumerate(llm.generate(raw_inputs, sampling_params)):
         prompt = output.prompt
