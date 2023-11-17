@@ -59,11 +59,11 @@ if __name__ == "__main__":
     llm = LLM(model=script_args.model_path, dtype=script_args.dtype, gpu_memory_utilization=script_args.gpu_utilization,
               tensor_parallel_size=script_args.world_size)
 
-    test_df["body"] = test_df.apply(
+    test_df["context"] = test_df.apply(
         lambda row: truncate_qa_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
                                              question=row["question"],
-                                             context=row["body"],
-                                             answer=row["summary"],
+                                             context=row["context"],
+                                             answer=row["answer"],
                                              tokenizer=tokenizer,
                                              max_context=script_args.max_input_length), axis=1)
     raw_inputs = test_df.apply(lambda row: prepare_conversation(row, tokenizer, chat_template=template),
