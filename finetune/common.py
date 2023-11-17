@@ -48,12 +48,23 @@ def truncate_summary_example_chat(system, question, body, summary, tokenizer, ma
     return restrict_article(body, body_tokens, tokenizer)
 
 
+def truncate_qa_example_chat(system, question, context, answer, tokenizer, max_context,
+                             buffer=20, template=None):
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": format_llama_qa_user({"question": question, "context": ""})},
+        {"role": "assistant", "content": format_llama_qa_resp({"answer": answer})}
+    ]
+    body_tokens = max_context - len(tokenizer.apply_chat_template(messages, chat_template=template)) - buffer
+    return restrict_article(context, body_tokens, tokenizer)
+
+
 def format_llama_sum_user(example):
     return config.LLAMA_USER_SUMMARY_TEMPLATE.format(context=example["body"], question=example["question"])
 
 
 def format_llama_qa_user(example):
-    return config.LLAMA_USER_QA_TEMPLATE.format(context=example["body"], question=example["question"])
+    return config.LLAMA_USER_QA_TEMPLATE.format(context=example["context"], question=example["question"])
 
 
 def format_llama_sum_resp(example):
@@ -61,7 +72,7 @@ def format_llama_sum_resp(example):
 
 
 def format_llama_qa_resp(example):
-    return config.LLAMA_AI_QA_TEMPLATE.format(response=example["response"])
+    return config.LLAMA_AI_QA_TEMPLATE.format(response=example["answer"])
 
 
 def get_batch_row(examples, i):

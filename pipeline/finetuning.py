@@ -122,7 +122,8 @@ def get_llm(kind="openai"):
 
 
 async def async_retry_with_backoff(func, *params, limiter=None, start=1, factor=2, max_retry=6,
-                                   exceptions=(Timeout, RateLimitError, APIConnectionError, APIError)):
+                                   exceptions=(Timeout, RateLimitError,
+                                               APIConnectionError, APIError, ResourceExhausted)):
     retry_time = 0
     while True:
         if retry_time > max_retry:

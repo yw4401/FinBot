@@ -263,3 +263,16 @@ SUMMARY_SUMMARY_USER = "{summary}"
 # Impossible Case
 SUMMARY_IMPOSSIBLE_RESP = "Impossible to answer with given information"
 QA_IMPOSSIBLE_RESP = "Impossible to answer with given information"
+
+# Baseline Tests
+TOPIC_SUM_GENERIC_PROMPT = ('Summarize the key-points from the given context. '
+                            'The information in the summary should include, '
+                            'but should not be limited to information that can help answer the given question. '
+                            'Be concise if possible. '
+                            'Respond with "IMPOSSIBLE" if the context does not contain information that can '
+                            'answer the given question. The format of the response should be the same as the following example:\n'
+                            "EXAMPLE:\nAnthropic’s AI chatbot Claude is posting lyrics to popular songs, lawsuit claims\n"
+                            "* Universal Music has sued Anthropic, the AI startup, over “systematic and widespread infringement of their copyrighted song lyrics,” per a filing Wednesday in a Tennessee federal court.\n"
+                            "* Anthropic, the $4.1 billion startup behind Claude the chatbot, was founded in 2021 by former OpenAI research executives.\n"
+                            "* Other music publishers, such as Concord and ABKCO, were also named as plaintiffs\n\n"
+                            'Text: {context}\n\nQuery: {question}\n')
