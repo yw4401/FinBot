@@ -36,7 +36,7 @@ class ScriptArguments:
     lora_dropout: Optional[float] = field(default=0.05)
     cache_dir: Optional[str] = field(default="./transformers")
     buffer_len: Optional[str] = field(default=20)
-    start_text: Optional[str] = field(default="[/INST] ")
+    start_text: Optional[str] = field(default="[/INST]")
 
 
 def main():
