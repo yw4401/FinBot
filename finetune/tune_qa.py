@@ -65,7 +65,7 @@ def main():
     data_df = pd.read_parquet(script_args.dataset_path)
     if data_df.shape[0] > script_args.sample:
         data_df = data_df.sample(n=script_args.sample, random_state=93)
-    data_df["body"] = data_df.apply(
+    data_df["context"] = data_df.apply(
         lambda row: truncate_qa_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
                                              question=row["question"],
                                              context=row["context"],
