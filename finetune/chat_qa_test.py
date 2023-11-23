@@ -60,7 +60,7 @@ if __name__ == "__main__":
               tensor_parallel_size=script_args.world_size)
 
     test_df["context"] = test_df.apply(
-        lambda row: truncate_qa_example_chat(system=config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
+        lambda row: truncate_qa_example_chat(system=config.LLAMA_QA_SYSTEM_INSTRUCTION,
                                              question=row["question"],
                                              context=row["context"],
                                              answer=row["answer"],
