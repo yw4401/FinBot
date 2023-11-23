@@ -46,6 +46,6 @@ LLAMA_QA_SYSTEM_INSTRUCTION = ("Answer the given question using only the given c
 LLAMA_USER_SUMMARY_TEMPLATE = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"
 LLAMA_USER_QA_TEMPLATE = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"
 LLAMA_AI_SUMMARY_TEMPLATE = "{summary}"
-LLAMA_AI_QA_TEMPLATE = "{answer}"
+LLAMA_AI_QA_TEMPLATE = "{response}"
 PLAIN_INPUT_TEMPLATE = "context: {body}\nquestion: {question}\ncreate a summary of the context that includes information related to the question: "
 PLAIN_OUTPUT_TEMPLATE = "{summary}"
