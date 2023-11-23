@@ -10,8 +10,8 @@ import tqdm.asyncio as tqao
 from transformers import HfArgumentParser
 import pandas as pd
 
-from pipeline import config
-from pipeline.finetuning import async_retry_with_backoff
+import config
+from finetuning import async_retry_with_backoff
 
 
 @dataclass
@@ -22,17 +22,18 @@ class ScriptArguments:
     context_col: Optional[str] = field(default="body")
     question_col: Optional[str] = field(default="question")
     predict_col: Optional[str] = field(default="predicted")
+    prompt_var: Optional[str] = field(default="TOPIC_SUM_GENERIC_PROMPT")
     max_new_tokens: Optional[int] = field(default=256)
     temperature: Optional[float] = field(default=0)
 
 
-def create_chain(llm):
-    prompt = PromptTemplate.from_template(config.TOPIC_SUM_GENERIC_PROMPT)
+def create_chain(llm, prompt_var):
+    prompt = PromptTemplate.from_template(getattr(config, prompt_var))
     return prompt | llm
 
 
-async def generate_resp(context, question, llm, limiter):
-    filter_chain = create_chain(llm)
+async def generate_resp(context, question, llm, limiter, prompt_var):
+    filter_chain = create_chain(llm, prompt_var)
     try:
         return await async_retry_with_backoff(filter_chain.ainvoke, {"context": context, "question": question},
                                               limiter=limiter)
@@ -40,10 +41,10 @@ async def generate_resp(context, question, llm, limiter):
         return ""
 
 
-async def generate_all_resp(llm, df, max_request=5):
+async def generate_all_resp(llm, df, prompt_var, max_request=5):
     responses = []
     limiter = Semaphore(value=max_request)
-    flist = [generate_resp(row["context"], row["question"], llm, limiter) for _, row in
+    flist = [generate_resp(row["context"], row["question"], llm, limiter, prompt_var) for _, row in
              df.iterrows()]
     for i, resp in enumerate(await tqao.tqdm_asyncio.gather(*flist)):
         responses.append(resp)
@@ -65,7 +66,7 @@ async def main(script_args):
         script_args.context_col: "context",
         script_args.question_col: "question"
     })
-    test_df = await generate_all_resp(plan_llm, test_df)
+    test_df = await generate_all_resp(plan_llm, test_df, script_args.prompt_var)
     return test_df
 
 

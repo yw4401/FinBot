@@ -23,14 +23,14 @@ from common import format_summary_example, truncate_summary_example_chat, create
 
 @dataclass
 class ScriptArguments:
-    model_path: Optional[str] = field(default="Open-Orca/Mistral-7B-OpenOrca")
+    model_path: Optional[str] = field(default="meta-llama/Llama-2-7b-chat-hf")
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-qa-train.parquet")
     template_path: Optional[str] = field(default=None)
     flash_attention: Optional[bool] = field(default=True)
     use_meta: Optional[bool] = field(default=True)
     sample: Optional[int] = field(default=50000)
-    model_max_length: Optional[int] = field(default=4096)
+    model_max_length: Optional[int] = field(default=4096 - 256)
     model_max_new_tokens: Optional[int] = field(default=256)
     lora_target: Optional[str] = field(default="q_proj,k_proj,v_proj,o_proj")
     lora_r: Optional[int] = field(default=16)
@@ -38,7 +38,7 @@ class ScriptArguments:
     lora_dropout: Optional[float] = field(default=0.05)
     cache_dir: Optional[str] = field(default="./transformers")
     buffer_len: Optional[str] = field(default=20)
-    start_text: Optional[str] = field(default="<|im_start|> assistant\n")
+    start_text: Optional[str] = field(default="[/INST] ")
 
 
 def main():

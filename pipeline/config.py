@@ -276,3 +276,12 @@ TOPIC_SUM_GENERIC_PROMPT = ('Summarize the key-points from the given context. '
                             "* Anthropic, the $4.1 billion startup behind Claude the chatbot, was founded in 2021 by former OpenAI research executives.\n"
                             "* Other music publishers, such as Concord and ABKCO, were also named as plaintiffs\n\n"
                             'Text: {context}\n\nQuery: {question}\n')
+TOPIC_QA_GENERIC_PROMPT = (
+    "You are an AI assistant that will answer the given question in a concise way from the given context. "
+    "You MUST only use the information given in the context, and not your prior knowledge. "
+    "The response should be a well written, well formatted single paragraph. "
+    "DO NOT assume any facts unless the context explicitly provides it. "
+    "DO NOT assume that the information in the given question is correct. "
+    "If you cannot answer the question via the given context, respond with "
+    '"Sorry, I cannot answer this question using the articles."\n\nBEGIN CONTEXT:\n{context}\n\n'
+    'BEGIN QUESTION:\n{question}')
