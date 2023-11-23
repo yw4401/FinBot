@@ -79,9 +79,9 @@ def get_batch_row(examples, i):
     return {k: examples[k][i] for k in examples}
 
 
-def format_llama_example(example, system, user_func, resp_func, tokenizer, template=None):
+def format_llama_example(example, system, user_func, resp_func, tokenizer, rows, template=None):
     output_texts = []
-    for i in range(len(example['body'])):
+    for i in range(rows):
         s = resp_func(get_batch_row(example, i))
         user = user_func(get_batch_row(example, i))
 
@@ -101,12 +101,13 @@ def format_llama_example(example, system, user_func, resp_func, tokenizer, templ
 
 def format_summary_example(example, tokenizer, template=None):
     return format_llama_example(example, config.LLAMA_SUMMARY_BULLET_INSTRUCTION,
-                                format_llama_sum_user, format_llama_sum_resp, tokenizer, template)
+                                format_llama_sum_user, format_llama_sum_resp, tokenizer, len(example["body"]), template)
 
 
 def format_qa_example(example, tokenizer, template=None):
     return format_llama_example(example, config.LLAMA_QA_SYSTEM_INSTRUCTION,
-                                format_llama_qa_user, format_llama_qa_resp, tokenizer, template)
+                                format_llama_qa_user, format_llama_qa_resp, tokenizer, len(example["context"]),
+                                template)
 
 
 def find_target_modules(model):
