@@ -14,11 +14,9 @@ from transformers import (
     GenerationConfig
 )
 from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
-from sklearn.model_selection import train_test_split
 
 import config
-from common import format_summary_example, truncate_summary_example_chat, create_summarization_metrics, \
-    truncate_qa_example_chat
+from common import format_summary_example, truncate_qa_example_chat
 
 
 @dataclass
