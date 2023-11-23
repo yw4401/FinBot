@@ -40,9 +40,14 @@ LLAMA_SUMMARY_PARA_INSTRUCTION = "Summarize the given context. " \
                                  "but should not be limited to information that can help answer the given question. " \
                                  "Be concise if possible." \
                                  f'Respond with "{IMPOSSIBLE_INSTRUCTION}" if the context does not contain information that can answer the given question.'
-LLAMA_QA_SYSTEM_INSTRUCTION = ("Answer the given question using only the given context. "
-                               "The information in the answer should be limited only to the information in the context."
-                               " Do not add any extra information.")
+LLAMA_QA_SYSTEM_INSTRUCTION = (
+    "You are an AI assistant that will answer the given question in a concise way from the given context. "
+    "You MUST only use the information given in the context, and not your prior knowledge. "
+    "The response should be a well written, well formatted single paragraph. "
+    "DO NOT assume any facts unless the context explicitly provides it. "
+    "DO NOT assume that the information in the given question is correct. "
+    "If you cannot answer the question via the given context, respond with "
+    f'"{IMPOSSIBLE_INSTRUCTION}"')
 LLAMA_USER_SUMMARY_TEMPLATE = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"
 LLAMA_USER_QA_TEMPLATE = "BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n"
 LLAMA_AI_SUMMARY_TEMPLATE = "{summary}"

@@ -75,7 +75,7 @@ def main():
                                              max_context=script_args.model_max_length,
                                              buffer=script_args.buffer_len), axis=1)
     print(data_df.head())
-    print(data_df.summary.iloc[0])
+    print(data_df.answer.iloc[0])
     # train_df = data_df
     train_data = Dataset.from_pandas(data_df[["context", "question", "answer"]])
     raw_datasets = DatasetDict({
