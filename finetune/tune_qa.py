@@ -16,7 +16,7 @@ from transformers import (
 from trl import DataCollatorForCompletionOnlyLM, SFTTrainer
 
 import config
-from common import format_summary_example, truncate_qa_example_chat
+from common import truncate_qa_example_chat, format_qa_example
 
 
 @dataclass
@@ -75,6 +75,8 @@ def main():
                                              max_context=script_args.model_max_length,
                                              buffer=script_args.buffer_len), axis=1)
     print(data_df.head())
+    print(data_df.context.iloc[0])
+    print(data_df.question.iloc[0])
     print(data_df.answer.iloc[0])
     # train_df = data_df
     train_data = Dataset.from_pandas(data_df[["context", "question", "answer"]])
@@ -127,7 +129,7 @@ def main():
     model.generation_config = gen_config
     trainer = SFTTrainer(
         model=model, args=train_args, train_dataset=raw_datasets["train"],
-        formatting_func=lambda x: format_summary_example(x, tokenizer, template),
+        formatting_func=lambda x: format_qa_example(x, tokenizer, template),
         data_collator=collator, tokenizer=tokenizer,
         max_seq_length=script_args.model_max_length, peft_config=peft_config, packing=False
     )

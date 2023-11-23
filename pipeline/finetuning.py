@@ -358,7 +358,7 @@ def inject_noise(df: pd.DataFrame, splitter,
 
     # Pure Noise Chunks
     noise_df = df.sample(frac=pure_noise)
-    noise_df[result_col] = config.SUMMARY_IMPOSSIBLE_RESP
+    noise_df[result_col] = impossible_resp
     noise_bodies = []
     for idx, row in noise_df.iterrows():
         chunk_amt = np.random.randint(1, target_chunks + 1)
