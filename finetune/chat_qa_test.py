@@ -30,7 +30,7 @@ class ScriptArguments:
 def prepare_conversation(row, tokenizer, chat_template=None):
     conversation = [{"role": "system", "content": config.LLAMA_QA_SYSTEM_INSTRUCTION},
                     {"role": "user", "content": format_llama_qa_user(dict(question=row["question"],
-                                                                          context=row["body"]))}]
+                                                                          context=row["context"]))}]
     chat_form = tokenizer.apply_chat_template(conversation, chat_template=chat_template,
                                               tokenize=False, add_generation_prompt=True)
     return chat_form
@@ -74,5 +74,5 @@ if __name__ == "__main__":
         generated_text = output.outputs[0].text
         results.append(generated_text)
     test_df["predicted"] = results
-    out_file = f"{script_args.output_name}-test-predicted.parquet"
+    out_file = f"{script_args.output_name}-qa-test-predicted.parquet"
     test_df.to_parquet(out_file, index=False)
