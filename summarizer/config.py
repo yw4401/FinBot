@@ -49,7 +49,7 @@ QA_RESP_PROMPT = (
     "DO NOT assume any facts unless the context explicitly provides it. "
     "DO NOT assume that the information in the given question is correct. "
     "If you cannot answer the question via the given context, respond with "
-    '"Sorry, I cannot answer this question using the articles."\n\nBEGIN CONTEXT:\n{context}\n\n'
+    '"Impossible to answer with given information"\n\nBEGIN CONTEXT:\n{context}\n\n'
     'BEGIN QUESTION:\n{question}')
 FUSION_SYSTEM_PROMPT = (
     "You are a helpful AI assistant that will help with optimizing queries for a retrieval augmented generation "
@@ -73,6 +73,11 @@ Summarize the key-points from the given context. The information in the summary 
 <|im_start|>user
 BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n<|im_end|>
 <|im_start|>assistant: """
+QA_LLAMA_PROMPT = """[INST] <<SYS>>
+You are an AI assistant that will answer the given question in a concise way from the given context. You MUST only use the information given in the context, and not your prior knowledge. The response should be a well written, well formatted single paragraph. DO NOT assume any facts unless the context explicitly provides it. DO NOT assume that the information in the given question is correct. If you cannot answer the question via the given context, respond with "Impossible to answer with given information"
+<</SYS>>
+
+BEGIN CONTEXT:\n{context}\n\nBEGIN QUESTION:\n{question}\n [/INST] """
 TOPIC_SUM_GENERIC_PROMPT = ('Summarize the key-points from the given context. '
                             'The information in the summary should include, '
                             'but should not be limited to information that can help answer the given question. '
@@ -106,7 +111,9 @@ KPI_PROMPT = ("You are a helpful AI assistant that will identify the top relevan
 # Model Deployment
 SUM_API_SERVER = "http://summarizer/v1"
 SUM_API_MODEL = "Open-Orca/Mistral-7B-OpenOrca"
-QA_MODEL = "vertexai"
+QA_API_SERVER = "http://qa-vm/v1"
+QA_API_MODEL = "meta-llama/Llama-2-7b-chat-hf"
+QA_MODEL = "custom"
 SUM_MODEL = "custom"
 NER_MODEL = "vertexai"
 KPI_MODEL = "vertexai"

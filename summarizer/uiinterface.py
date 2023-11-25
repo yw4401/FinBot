@@ -316,6 +316,11 @@ def get_qa_llm(kind=config.QA_MODEL, max_token=256):
         plan_llm = OpenAI(model_name="gpt-3.5-turbo-instruct", openai_api_key=get_openai_credentials(),
                           temperature=0, max_tokens=max_token)
         return plan_llm
+    elif kind == "custom":
+        plan_llm = OpenAI(openai_api_base=config.QA_API_SERVER, model_name=config.QA_API_MODEL,
+                          max_tokens=max_token, temperature=0,
+                          openai_api_key="EMPTY", presence_penalty=1)
+        return plan_llm
     else:
         raise NotImplemented()
 

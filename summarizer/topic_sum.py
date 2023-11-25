@@ -379,7 +379,10 @@ def topic_aggregate_chain(model, retriever, **kwargs):
     :param kwargs: keyword arguments for from_chain_type for RetrievalQA
     """
 
-    chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.QA_RESP_PROMPT)}
+    if config.QA_MODEL == "custom":
+        chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.QA_LLAMA_PROMPT)}
+    else:
+        chain_type_kwargs = {"prompt": PromptTemplate.from_template(config.QA_RESP_PROMPT)}
     final_chain = RetrievalQA.from_chain_type(llm=model, chain_type="stuff",
                                               retriever=retriever,
                                               chain_type_kwargs=chain_type_kwargs,
