@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
 
 ENV PYTHONUNBUFFERED True
 ENV APP_HOME /FinBot
@@ -9,6 +9,7 @@ ENV TEMPLATE "meta-llama/Llama-2-7b-chat-hf"
 WORKDIR $APP_HOME
 
 RUN apt-get update && apt-get install build-essential -y
-RUN pip install vllm transformers fschat accelerate sentencepiece protobuf
+RUN pip install transformers fschat accelerate sentencepiece protobuf
+RUN pip install https://github.com/vllm-project/vllm/releases/download/v0.2.2/vllm-0.2.2+cu118-cp310-cp310-manylinux1_x86_64.whl
 EXPOSE $PORT
 ENTRYPOINT python -m vllm.entrypoints.openai.api_server --model "shilongdai/llama-qa-7b" --dtype float16 --port $PORT --gpu-memory-utilization $UTIL --tensor-parallel-size $TP_SIZE --served-model-name $TEMPLATE
