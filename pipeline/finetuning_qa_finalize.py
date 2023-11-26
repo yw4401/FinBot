@@ -8,10 +8,10 @@ if __name__ == "__main__":
     splitter = create_splitter()
     train_aug = inject_noise(train, splitter, context_col="context", result_col="answer",
                              impossible_resp=config.QA_IMPOSSIBLE_RESP,
-                             chunk_processor=lambda row, chunks: list(chunks))
+                             chunk_processor=lambda row, chunks: list(chunks), pure_noise=0.3)
     test_aug = inject_noise(test, splitter, context_col="context", result_col="answer",
                             impossible_resp=config.QA_IMPOSSIBLE_RESP,
-                            chunk_processor=lambda row, chunks: list(chunks))
+                            chunk_processor=lambda row, chunks: list(chunks), pure_noise=0.3)
     print(train_aug.head())
     print("Uploading article snapshots")
     target_url = f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_QA_PATTERN}"

@@ -21,7 +21,7 @@ from common import truncate_qa_example_chat, format_qa_example
 
 @dataclass
 class ScriptArguments:
-    model_path: Optional[str] = field(default="meta-llama/Llama-2-7b-chat-hf")
+    model_path: Optional[str] = field(default="meta-llama/Llama-2-13b-chat-hf")
     token_path: Optional[str] = field(default="./hf_token")
     dataset_path: Optional[str] = field(default="./fine-tune-qa-train.parquet")
     template_path: Optional[str] = field(default=None)

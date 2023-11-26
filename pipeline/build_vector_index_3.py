@@ -246,8 +246,8 @@ def get_unindexed_topics(client: bq.Client):
             f"WHERE TAT.article_id = CA.id AND TAT.topic_prob >= {config.TOPIC_EMBED_TOP_THRESHOLD} " \
             f"GROUP BY TAT.model, TAT.topic) AS TDT, " \
             f"Articles.TopicSummary AS TS, " \
-            f"(SELECT TM.id AS id, MAX(fit_date) FROM Articles.TopicModel as TM " \
-            f"WHERE NOT TM.servable GROUP BY TM.id) AS NM " \
+            f"(SELECT TM.id AS id, TM.fit_date FROM Articles.TopicModel as TM " \
+            f"ORDER BY TM.fit_date DESC LIMIT 1) AS NM " \
             f"WHERE NM.id = TDT.model AND TDT.model = TS.model AND TDT.topic = TS.topic ORDER BY TS.topic ASC"
     result = []
     with closing(bqapi.Connection(client=client)) as connection:

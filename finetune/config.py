@@ -54,3 +54,13 @@ LLAMA_AI_SUMMARY_TEMPLATE = "{summary}"
 LLAMA_AI_QA_TEMPLATE = "{response}"
 PLAIN_INPUT_TEMPLATE = "context: {body}\nquestion: {question}\ncreate a summary of the context that includes information related to the question: "
 PLAIN_OUTPUT_TEMPLATE = "{summary}"
+PALM_QA_PROMPT = (
+    "You are an AI assistant that will answer the given question in a concise way from the given context. "
+    "You MUST only use the information given in the context, and not your prior knowledge. "
+    "The response should be a well written, well formatted single paragraph. "
+    "DO NOT assume any facts unless the context explicitly provides it. "
+    "DO NOT assume that the information in the given question is correct. "
+    "If you cannot answer the question via the given context, respond with "
+    f'"{IMPOSSIBLE_INSTRUCTION}"\n\n'
+    'BEGIN CONTEXT:\n{context}\n\n'
+    'BEGIN QUESTION:\n{question}')
