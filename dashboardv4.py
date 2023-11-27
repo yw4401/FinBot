@@ -123,6 +123,7 @@ def plot_data(data, ticker_symbol, summary, kpis):
 def create_screener(user_text, resp_text, period):
     str_resp = ". ".join(resp_text)
     results = []
+    all_tickers = set()
     with st.spinner("Extracting symbols"):
         ticker_symbol = ner.extract_company_ticker(user_text, str_resp)
     if len(ticker_symbol) != 0:
@@ -131,6 +132,11 @@ def create_screener(user_text, resp_text, period):
             if len(results) > 0:
                 st.write("### You may be interested in:")
             for ticker, data, summary, result in results[:3]:
+                ticker = ticker.upper()
+                if ticker in all_tickers:
+                    continue
+                else:
+                    all_tickers.add(ticker)
                 with st.expander(label=ticker, expanded=False):
                     plot_data(data, ticker, summary, result)
                     st.write(f"https://finance.yahoo.com/quote/{ticker}")

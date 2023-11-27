@@ -463,9 +463,9 @@ async def get_qa_result(query, now, delta, model, queries):
     qa_completed, summaries = await asyncio.gather(qa_coro, sum_coro)
     filtered_sums = []
     for s in summaries:
-        distance = determine_relevant_keypoints(query + ". " + qa_completed["answer"], [s["title"]] + s["keypoints"])
+        distance = determine_relevant_keypoints(query + ". " + qa_completed["answer"], [s["title"]] + s["keypoints"][:3])
         print(f"Found distance {distance} for summary {s['title']}")
-        if distance >= 0.02:
+        if distance >= 0.03:
             filtered_sums.append(s)
 
     return {
