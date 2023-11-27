@@ -283,15 +283,15 @@ infrastructure such as VLLM, we arrived at 2 candidate model for targeted summar
 of the Llama-2 7B model. The second candidate, Open-Orca Mistral-7B was one of the top performer on the HuggingFace 
 LLM leaderboard. We evaluated the base model on our targeted summaries test split by considering the ROUGE-2 Score on instances 
 where both the predicted and actual summaries are not impossible to answer, and the 
-ability of the model to classify the case when it's impossible to create the targeted summary. 
-
-![Initial ROUGE](images/initial_rouge.png)
-
-![Initial Hallucination](images/initial_hal.png)
+ability of the model to classify the case when it's impossible to create the targeted summary.
 
 From our initial evaluation, we determined that while both models did not meet our expectations on identifying impossible 
 cases via a prompt engineering approach, Mistral is closer to our goal from an output perspective. Furthermore, Mistral 
 has proven itself on the Huggingface Leaderboard. Thus, we decided to move forward with Open-Orca-Mistral7B.
+
+![Tuned ROUGE](images/rouge2.png)
+
+![Tuned Hallucination](images/tune_hal.png)
 
 ##### Model Finetuning ([finetune](finetune))
 
@@ -305,12 +305,6 @@ We fine-tuned the Mistral model using the standard language modeling objective o
 - LORA rank: 16
 - LORA dropout: 0.05
 - LORA target: q_proj, k_proj, v_proj, o_proj
-
-The performance comparison after tuning is given below:
-
-![Tuned ROUGE](images/rouge2.png)
-
-![Tuned Hallucination](images/tune_hal.png)
 
 After fine-tuning, the ROUGE-2 score for the possible cases, and F1 score for identifying impossible case increased drastically. Furthermore, 
 the recall for identifying the impossible case was 98% on the test set. Thus, the model errs more on the side of false 
