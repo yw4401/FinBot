@@ -48,7 +48,7 @@ write_files:
       User=answerer
       Type=oneshot
       RemainAfterExit=true
-      ExecStart=/usr/bin/docker run --rm -p 80:80 --name=answerer --shm-size=10gb --volume /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 --volume /var/lib/nvidia/bin:/usr/local/nvidia/bin --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia1:/dev/nvidia1 --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidiactl:/dev/nvidiactl us-central1-docker.pkg.dev/msca310019-capstone-f945/null-docker/llama-qa:latest
+      ExecStart=/usr/bin/docker run --rm -p 80:80 --name=answerer --shm-size=10gb --volume /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 --volume /var/lib/nvidia/bin:/usr/local/nvidia/bin --device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidia1:/dev/nvidia1 --device /dev/nvidia2:/dev/nvidia2 --device /dev/nvidia3:/dev/nvidia3 --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidiactl:/dev/nvidiactl us-central1-docker.pkg.dev/msca310019-capstone-f945/null-docker/llama-qa:latest
       StandardOutput=journal+console
       StandardError=journal+console
 
