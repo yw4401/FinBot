@@ -228,7 +228,7 @@ way adhering to the convention of news and/or reports.
 
 The training setup can be described as a way to minimize the distance between the embedding vectors between the 
 question and associated answer candidates without making all the embeddings similar to each other. The loss function 
-used is identical to the Multiple Negatives loss described in [Efficient Natural Language Response Suggestion for Smart Reply](https://arxiv.org/pdf/1705.00652.pdf)
+used is identical to the Multiple Negatives loss described in [Efficient Natural Language Response Suggestion for Smart Reply](https://arxiv.org/pdf/1705.00652.pdf).
 
 <img src="images/embedding_tune.png" alt="drawing" width="768"/>
 
@@ -296,7 +296,7 @@ has proven itself on the Huggingface Leaderboard. Thus, we decided to move forwa
 ##### Model Finetuning ([finetune](finetune))
 
 We fine-tuned the Mistral model using the standard language modeling objective on the training split of our article dataset using half-precision LORA with the following hyper-parameters:
-- Epoch: 4
+- Epoch: 2
 - Learning Rate: 0.0001
 - Effective Batch Size: 4
 - Weight Decay: 0.1
@@ -306,9 +306,9 @@ We fine-tuned the Mistral model using the standard language modeling objective o
 - LORA dropout: 0.05
 - LORA target: q_proj, k_proj, v_proj, o_proj
 
-After fine-tuning, the ROUGE-2 score for the possible cases, and F1 score for identifying impossible case increased drastically. Furthermore, 
-the recall for identifying the impossible case was 98% on the test set. Thus, the model errs more on the side of false 
-positives, which is acceptable since we do not want to provide potentially false information.
+After fine-tuning, the ROUGE-2 score for the possible cases, and F1 score for identifying impossible case increased drastically to 0.95. 
+Thus, the model is unlikely to distract the user by providing irrelevant summaries, or tries to summarize non-existent 
+key-points.
 
 #### Question Answering
 @Shefali, @Takuma Add once done
