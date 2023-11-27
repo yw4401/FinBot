@@ -202,7 +202,7 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - Raw text generation is enriched via publicly available metrics such as P/E ratio, Cashflow etc based on companies mentioned in the query and output
 - The Streamlit UI combines the QA generation, the summarized key-points, and the KPIs in a coherent page for the user.
 
-### Model Improvements
+### Model Improvements ([finetune](finetune))
 
 In addition to creating envelops around LLMs, we customized the pre-trained models for our solution:
 
@@ -293,7 +293,7 @@ has proven itself on the Huggingface Leaderboard. Thus, we decided to move forwa
 
 ![Tuned Hallucination](images/tune_hal.png)
 
-##### Model Finetuning ([finetune](finetune))
+##### Model Finetuning
 
 We fine-tuned the Mistral model using the standard language modeling objective on the training split of our article dataset using half-precision LORA with the following hyper-parameters:
 - Epoch: 2
