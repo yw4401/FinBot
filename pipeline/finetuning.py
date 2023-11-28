@@ -40,6 +40,12 @@ class FilteredOutput(BaseModel):
                            default=False)
 
 
+class AugmentedQA(BaseModel):
+    answer: str = Field(description="the given answer", default="FAILED")
+    answerable: str = Field(description="the given answerable question", default="FAILED")
+    unanswerable: str = Field(description="the given unanswerable question", default="FAILED")
+
+
 def create_full_prompt(system, user, examples):
     final_examples = []
     for e in examples:
@@ -101,7 +107,20 @@ def create_rewrite_headline_chain(llm):
     return augment_chain
 
 
-def get_llm(kind="openai"):
+def create_augment_qa_chain(llm):
+    output_parser = PydanticOutputParser(pydantic_object=AugmentedQA)
+    system_prompt = SystemMessagePromptTemplate.from_template(config.QA_AUG_SYSTEM)
+    user_prompt = HumanMessagePromptTemplate.from_template(config.QA_AUG_USER)
+    chat_prompt = ChatPromptTemplate.from_messages([system_prompt, user_prompt])
+    system_parse_prompt = SystemMessagePromptTemplate.from_template(config.QA_PARSE_SYSTEM)
+    user_parse_prompt = HumanMessagePromptTemplate.from_template(config.QA_PARSE_USER)
+    parse_chat_prompt = create_full_prompt(system_parse_prompt, user_parse_prompt, config.QA_PARSE_EXAMPLE)
+    parse_chat_prompt = parse_chat_prompt.partial(format_instructions=output_parser.get_format_instructions())
+    augment_chain = {"text": chat_prompt | llm} | parse_chat_prompt | llm | output_parser
+    return augment_chain
+
+
+def get_llm(kind="vertexai"):
     if kind == "openai":
         with open(config.OPENAI_KEY_PATH) as fp:
             key = fp.read().strip()
@@ -115,6 +134,7 @@ def get_llm(kind="openai"):
                                 model_name=config.SUMMARY_AUG_MODEL,
                                 project=config.VERTEX_AI_PROJECT,
                                 credentials=credentials,
+                                max_retries=1, request_timeout=10,
                                 max_output_tokens=1024)
         return plan_llm
     else:
@@ -123,7 +143,8 @@ def get_llm(kind="openai"):
 
 async def async_retry_with_backoff(func, *params, limiter=None, start=1, factor=2, max_retry=6,
                                    exceptions=(Timeout, RateLimitError,
-                                               APIConnectionError, APIError, ResourceExhausted)):
+                                               APIConnectionError, APIError,
+                                               ResourceExhausted, InternalServerError)):
     retry_time = 0
     while True:
         if retry_time > max_retry:
@@ -177,6 +198,14 @@ async def summary_summary_headline(text, llm, limiter):
         return await async_retry_with_backoff(rewriter.acall, {"summary": text}, limiter=limiter)
     except (ValueError, InvalidArgument):
         return {"text": "FAILED"}
+
+
+async def augment_qa_complete(text, plan_llm, limiter):
+    augment = create_augment_qa_chain(plan_llm)
+    try:
+        return await async_retry_with_backoff(augment.ainvoke, {"input_text": text}, limiter=limiter)
+    except (ValueError, InvalidArgument):
+        return {"output": AugmentedQA()}
 
 
 async def filter_summary(df, max_request=25):
@@ -259,11 +288,40 @@ async def augment_summary(df, max_request=25):
     return result
 
 
-def get_data_sets_df(sample_df, test_instances=1000):
+async def augment_articles_qa(df, max_request=25):
+    plan_llm = get_llm()
+    questions = []
+    unanswerable = []
+    answers = []
+    errors = []
+    limiter = Semaphore(value=max_request)
+    flist = [augment_qa_complete(i, plan_llm, limiter) for i in df.context.tolist()]
+    for i, augmentation in enumerate(await tqao.tqdm_asyncio.gather(*flist)):
+        output = augmentation
+        if not isinstance(output, AugmentedQA):
+            output = AugmentedQA()
+        if output.answer == "FAILED" or output.answerable == "FAILED" or output.unanswerable == "FAILED":
+            errors.append(i)
+        else:
+            questions.append(output.answerable)
+            unanswerable.append(output.unanswerable)
+            answers.append(output.answer)
+    result = df.copy()
+    if len(errors) > 0:
+        result = result.drop(index=result.iloc[errors].index)
+    result["answerable"] = questions
+    result["unanswerable"] = unanswerable
+    result["answer"] = answers
+    return result
+
+
+def get_data_sets_df(sample_df, test_instances=1000, context_col="body", resp_col="summary", answerable_col="question",
+                     unanswerable_col="reverse_question", final_question_col="question",
+                     impossible_resp=config.SUMMARY_IMPOSSIBLE_RESP):
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
-    sample_df["summary"] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
-    sample_df["summary"] = sample_df.summary.str.strip()
+    sample_df[resp_col] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
+    sample_df[resp_col] = sample_df.summary.str.strip()
 
     body = []
     published = []
@@ -271,21 +329,22 @@ def get_data_sets_df(sample_df, test_instances=1000):
     question = []
     pos = []
     for i, row in sample_df.iterrows():
-        body.extend([row["body"], row["body"]])
+        body.extend([row[context_col], row[context_col]])
         published.extend([row["published"], row["published"]])
-        summary.extend([row["summary"], config.SUMMARY_IMPOSSIBLE_RESP])
-        question.extend([row["question"], row["reverse_question"]])
+        summary.extend([row[resp_col], impossible_resp])
+        question.extend([row[answerable_col], row[unanswerable_col]])
         pos.extend([True, False])
     result_df = pd.DataFrame({
-        "body": body,
+        context_col: body,
         "published": published,
-        "question": question,
-        "summary": summary,
+        final_question_col: question,
+        resp_col: summary,
         "pos": pos
     })
 
     train_df, test_df = train_test_split(result_df, test_size=test_instances, stratify=result_df.pos)
-    return train_df[["body", "published", "question", "summary"]], test_df[["body", "published", "question", "summary"]]
+    return train_df[[context_col, "published", final_question_col, resp_col]], test_df[[context_col, "published",
+                                                                                        final_question_col, resp_col]]
 
 
 def get_full_data(client: bq.Client):
