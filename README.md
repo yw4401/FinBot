@@ -3,9 +3,8 @@
 ## Table of contents
 1. [Demo](#demo)
 2. [About FinBot](#background)
-   1. [Industry Research](#industry_research)
-   2. [Project Mission](#mission)
-   3. [Current Features](#features)
+   1. [Project Mission](#mission)
+   2. [Current Features](#features)
 3. [Project Implementation](#implementation)
    1. [Architecture](#architecture)
    2. [Data Ingestion](#ingestion)
