@@ -11,7 +11,7 @@
    2. [Data Ingestion](#ingestion)
    3. [Output Generation](#generation)
    4. [Model Improvements](#model)
-4. [Next Steps](#next)
+4. [Future Works](#next)
 
 
 ## Demo <a name="demo"></a>
@@ -65,7 +65,7 @@ investment choices by retail investors compared to a dedicated advisor or asset 
 our users the power to quickly digest facts and insights from the vast collection of publically available financial news 
 articles
 
-### Current Features
+### Current Features <a name="features"></a>
 
 #### Question Answering
 
@@ -88,7 +88,7 @@ would be able to learn about different companies at a glance.
 
 <img src="images/stock_screenshot.png" alt="drawing" width="768"/>
 
-## Project Implementation
+## Project Implementation <a name="implementation"></a>
 
 In order to accomplish the goal of the project, the features can be seen as retrieval augmented generation problems. 
 While LLMs may encode prior knowledge from pre-training, it is difficult to control and to ensure the correctness of 
@@ -97,7 +97,7 @@ for the purpose of assisting the users with market research and advice, the appr
 around LLMs, feed the LLMs data required to perform tasks pretaining to the features, and make use of the domain knowledge 
 and reasoning ability of the LLMs to create the outputs for the users.
 
-### High Level Process Flow
+### High Level Process Flow <a name="architecture"></a>
 
 <img src="images/arch_high.png" alt="drawing" width="768"/>
 
@@ -107,7 +107,7 @@ Our work to implement the process can be roughly divided into four main parts:
 - Model Improvements: Fine-tuning the LLMs to achieve desired performance and output format
 - Output Generation: Generating outputs via LLMs and augmenting the output with additional information
 
-### Data Ingestion for Articles
+### Data Ingestion for Articles <a name="ingestion"></a>
 
 The data collection pipeline collects and aggregate news articles. Then, it applies a series of NLP techniques including 
 co-reference resolution, topic modeling, text embedding, NER, and Min-Hash to augment the articles. Finally, it prepares 
@@ -162,7 +162,7 @@ the articles for output generation by chunking the article texts and indexing th
 
 Once the indices are built, the solution is ready to generate informative output for the users.
 
-### Output Generation
+### Output Generation <a name="generation"></a>
 
 The final output to the user consists of three main segments:
 - Direct answer to user query
@@ -195,7 +195,7 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - Raw text generation is enriched via publicly available metrics such as P/E ratio, Cashflow etc based on companies mentioned in the query and output
 - The Streamlit UI combines the QA generation, the summarized key-points, and the KPIs in a coherent page for the user.
 
-### Model Improvements ([finetune](finetune))
+### Model Improvements ([finetune](finetune)) <a name="model"></a>
 
 In addition to creating envelops around LLMs, we customized the pre-trained models for our solution:
 
@@ -337,6 +337,6 @@ We were able to achieve notable improvement in both ROUGE-2 and F1 score. Even w
 
 ![Tuned Hallucination QA](images/qa_tune_hal.png)
 
-## Future Work
+## Future Work <a name="next"></a>
 
 TODO
