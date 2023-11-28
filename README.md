@@ -88,13 +88,6 @@ would be able to learn about different companies at a glance.
 
 <img src="images/stock_screenshot.png" alt="drawing" width="768"/>
 
-#### On-demand Financial Advice
-
-FinBot can provide assistance in picking stocks, ETFs, mutual funds, and bonds if the users ask for it. Combining 
-with the other features, it can enable the users to manage their own assets without high time cost.
-
-INSERT SCREENSHOT HERE
-
 ## Project Implementation
 
 In order to accomplish the goal of the project, the features can be seen as retrieval augmented generation problems. 
@@ -306,7 +299,7 @@ We fine-tuned the Mistral model using the standard language modeling objective o
 - LORA dropout: 0.05
 - LORA target: q_proj, k_proj, v_proj, o_proj
 
-After fine-tuning, the ROUGE-2 score for the possible cases, and F1 score for identifying impossible case increased drastically to 0.95. 
+After fine-tuning, the ROUGE-2 score increased drastically, and the F1 score improved to 0.95.
 Thus, the model is unlikely to distract the user by providing irrelevant summaries, or tries to summarize non-existent 
 key-points.
 
@@ -324,6 +317,26 @@ We pre-processed QA dataset to adjust data for RAG settings. For example, when p
 - Confirmed the text length of answers to ensure that it is concise
 
 ![QA Model Fine-tuning](https://github.com/yw4401/FinBot/blob/b46d4cbf22fa11e0e4e8280be26a2ae2b928cc60/images/QA_Finetuning.png)
+
+##### Model Finetuning
+
+We fine-tuned the Llama-Chat-13B model using the standard language modeling objective on the training split of our article dataset using half-precision LORA with the following hyper-parameters:
+- Epoch: 1
+- Learning Rate: 0.0001
+- Effective Batch Size: 8
+- Weight Decay: 0.1
+- Learning Rate Schedule: Cosine
+- Learning Rate Warmup: 200 Steps
+- LORA rank: 16
+- LORA dropout: 0.05
+- LORA target: q_proj, k_proj, v_proj, o_proj
+
+We were able to achieve notable improvement in both ROUGE-2 and F1 score. Even with a single epoch of tuning, the F1 score for classifying impossible questions increased to 0.9 from 0.22.
+
+![Tuned ROUGE QA](images/qa_rouge2.png)
+
+![Tuned Hallucination QA](images/qa_tune_hal.png)
+
 ## Future Work
 
 TODO
