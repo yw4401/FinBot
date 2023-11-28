@@ -311,7 +311,18 @@ Thus, the model is unlikely to distract the user by providing irrelevant summari
 key-points.
 
 #### Question Answering
-@Shefali, @Takuma Add once done
+
+We fine-tuned the Llama-Chat-13B based on 20K Questions and Answering pairs from the followings datasets;
+- TAT-QA (Tabular And Textual dataset for Question Answering, containing 16,552 questions associated with 2,757 hybrid contexts from real-world financial reports)
+- FinQA (a large-scale dataset with Question-Answering pairs over Financial reports, written by financial experts. The dataset contains 8,281 financial QA pairs)
+- WebGLM QA (consists of 43,579 high-quality data samples that used to train the WebGLM generator module)
+
+##### Q&A Dataset Processing
+We pre-processed QA dataset to adjust data for RAG settings. For example, when processing TAT-QA, in order to train the model to generate concise response in under one paragraph for text based on Q&A, we took the followings steps:
+- Eliminated questions based on table data
+- Eliminated questions and answers with majority of context is number
+- Confirmed the text length of answers to ensure that it is concise
+
 ![QA Model Fine-tuning](https://github.com/yw4401/FinBot/blob/b46d4cbf22fa11e0e4e8280be26a2ae2b928cc60/images/QA_Finetuning.png)
 ## Future Work
 
