@@ -142,7 +142,7 @@ the articles for output generation by chunking the article texts and indexing th
 - Eliminating these duplicate news articles is crucial to improve efficiency, prevent potential biases caused by redundant information, and ensure a more accurate representation of the data.
 - In this context, we've employed the MinHash LSH technique to effectively eliminate duplicate news articles from the dataset.
 
-#### Coreference Resolution ([clean_data_1.py](pipeline/clean_data_1.py))
+#### 3.2.3 Coreference Resolution ([clean_data_1.py](pipeline/clean_data_1.py))
 - The ingestion pipeline uses a SPAN-Bert co-reference resolution model from allen-nlp.
 - In this transformation, each coreference is replaced with its primary mention.
 - More emphasis on named entities, and preserves context on text chunking.
