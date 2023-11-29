@@ -18,23 +18,31 @@ from spacy.tokens import Span
 # Progress tracking
 from tqdm import tqdm
 
+# Configuration settings
 import config
 
 
+# Function to get noun indices within a span
 def get_span_noun_indices(doc: Doc, cluster: List[List[int]]):
     spans = [doc[span[0]:span[1] + 1] for span in cluster]
     spans_pos = [[token.pos_ for token in span] for span in spans]
     span_noun_indices = [i for i, span_pos in enumerate(spans_pos)
                          if any(pos in span_pos for pos in ['NOUN', 'PROPN'])]
+    
+    # Returns indices of noun tokens in the span
     return span_noun_indices
 
 
+# Function to get the index of the cluster head
 def get_cluster_head_idx(doc, cluster):
+    # Determines the index of the cluster head within the span
     noun_indices = get_span_noun_indices(doc, cluster)
     return noun_indices[0] if noun_indices else 0
 
 
+# Function to print clusters of coreference resolution
 def print_clusters(doc, clusters):
+    # Prints resolved coreference clusters for debugging or analysis
     def get_span_words(span, allen_document):
         return ' '.join(allen_document[span[0]:span[1] + 1])
 
