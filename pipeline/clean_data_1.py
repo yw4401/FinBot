@@ -19,6 +19,8 @@ def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
             "FROM Articles.ScrapedArticles AS SA " \
             f"WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.ARTICLE_INGEST_MAX_DAYS} DAY)"
+
+    # SQL query to fetch cleaned articles within a specific timeframe
     cleaned_query = "SELECT CA.id FROM Articles.CleanedArticles AS CA " \
                     "WHERE CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), " \
                     f"INTERVAL {config.ARTICLE_INGEST_MAX_DAYS + 5} DAY)"
