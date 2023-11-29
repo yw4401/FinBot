@@ -24,6 +24,19 @@ FinBot is an AI driven web application capable of analyzing financially related 
 insights to retail investors. The application can empower the users to make better investment decisions while saving 
 time and money by leveraging the power of LLM retrieval augmented generation.
 
+### Why is FinBot necessary ? 
+
+#### Time Constraints and the Demand for Timely Information
+The modern retail investor faces a dilemma—a scarcity of time to delve into extensive research while needing to stay updated with the dynamic opportunities in the market. The pace of change in investment landscapes demands continuous vigilance, making it challenging for individuals to keep pace with market shifts and opportunities.
+
+#### High Costs Linked to Traditional Financial Advisors
+Traditional financial advisory services often come with steep costs, sometimes ranging into hundreds of dollars per hour. This financial barrier restricts access to expert guidance and tailored advice, especially for smaller investors or those looking for cost-effective solutions.
+
+#### Steady Growth in Assets Under Management
+The market reflects consistent growth in assets under management, showcasing a compound annual growth rate of around 9%. This expansion indicates an increasing interest and engagement in investing but also amplifies the need for accessible and scalable advisory solutions.
+
+<img src="images/asset_under_management.jpeg" alt="drawing" width="768"/>
+
 ### Project Mission <a name="mission"></a>
 
 As a retail investor with a diverse set of interests, there are many challenges to overcome in accomplishing 
@@ -64,6 +77,7 @@ The aim of the project is to alleviate those pain-points by reducing the informa
 investment choices by retail investors compared to a dedicated advisor or asset manager. Utilizing the power of AI, we provide 
 our users the power to quickly digest facts and insights from the vast collection of publically available financial news 
 articles
+
 
 ### Current Features <a name="features"></a>
 
