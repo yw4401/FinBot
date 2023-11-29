@@ -90,7 +90,7 @@ they need quickly.
 
 <img src="images/qa_screenshot.png" alt="drawing" width="768"/>
 
-#### Key-points Summarization
+#### 2.3.2 Key-points Summarization
 
 For each question, FinBot helps user to expand their view by summarizing key-points from different topics related 
 to their inquiry.
