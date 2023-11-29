@@ -15,6 +15,7 @@ from tqdm import tqdm # Importing tqdm for progress tracking
 
 
 def get_scraped_articles(client: bq.Client):
+    # SQL query to fetch scraped articles within a specific timeframe
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
             "FROM Articles.ScrapedArticles AS SA " \
             f"WHERE SA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.ARTICLE_INGEST_MAX_DAYS} DAY)"
