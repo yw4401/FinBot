@@ -85,5 +85,7 @@ if __name__ == "__main__":
     # Filtering out existing articles from the cleaned set
     cleaned_df = cleaned_df.loc[~cleaned_df.exists]
     print(f"Final Articles: {cleaned_df.shape[0]}")
+
+    # Adding coreference resolution to the final set of articles
     coref_df = add_coreference_resolution(cleaned_df, predictor=predictor, nlp=nlp)
     write_coref_articles(config.GCP_PROJECT, coref_df, batch=100)
