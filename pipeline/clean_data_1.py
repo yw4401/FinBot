@@ -62,6 +62,7 @@ def write_coref_articles(project, df, batch=10, jobs=8):
     for i in range(0, len(params), batch):
         batches.append(params[i:i + batch])
 
+    # Using joblib for parallel execution and tracking progress with tqdm
     parallel = Parallel(n_jobs=jobs, return_as="generator")
     with tqdm(total=len(batches)) as progress:
         for _ in parallel(delayed(write_batch)(project, b) for b in batches):
