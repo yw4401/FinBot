@@ -83,7 +83,7 @@ articles
 
 ### 2.3 Current Features <a name="features"></a>
 
-#### Question Answering
+#### 2.3.1 Question Answering
 
 Given any question about business news or developments in a time frame, FinBot can help user to get the information 
 they need quickly.
