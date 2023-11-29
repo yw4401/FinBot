@@ -17,6 +17,9 @@
 
 https://github.com/yw4401/FinBot/raw/main/images/Capstone%20demo1113.mp4
 
+https://github.com/yw4401/FinBot/assets/54665534/8e59fa43-9706-4af5-8bb3-4c6c8998292b
+
+
 ## About FinBot <a name="background"></a>
 
 FinBot is an AI driven web application capable of analyzing financially related news articles and providing 
