@@ -1,6 +1,6 @@
 # Importing necessary libraries and modules
 import gc # Garbage collection for memory management
-import re
+import re # Regular expression operations
 from datetime import datetime
 from typing import List
 
