@@ -6,6 +6,8 @@ import re, hashlib, math, time
 
 # NetworkX for graph operations
 import networkx as nx
+
+# Random number generation
 from random import randint, seed
 import config
 
