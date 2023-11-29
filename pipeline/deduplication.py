@@ -94,6 +94,7 @@ class minhashSigner:
         return signatures
 
 
+# Class implementing Locality Sensitive Hashing (LSH)
 class lsh:
     def __init__(self, threshold=0.8):
         self.threshold = threshold
