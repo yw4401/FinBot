@@ -39,7 +39,7 @@ The market reflects consistent growth in assets under management, showcasing a c
 #####                   Market Size Asset Under Management (Trillion $)
 <img src="images/asset_under_management.jpeg" alt="drawing" width="768"/>
 
-### Project Mission <a name="mission"></a>
+### 2.2 Project Mission <a name="mission"></a>
 
 As a retail investor with a diverse set of interests, there are many challenges to overcome in accomplishing 
 investment goals.
