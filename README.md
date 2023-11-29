@@ -189,7 +189,7 @@ The final output to the user consists of three main segments:
 
 The algorithms for handling output is located in the [summarizer](summarizer) directory.
 
-#### Retrieval
+#### 3.3.1 Retrieval
 - A hybrid RAG-Fusion approach is used for chunk retrieval
 - First, the user query is augmented with the interaction history with additional similar queries generated via LLM
 - Then, for each query in the query set, the chunks are retrieved from elastic search using a hybrid RRF search
