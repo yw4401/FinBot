@@ -11,7 +11,7 @@
    2. [Data Ingestion](#ingestion)
    3. [Output Generation](#generation)
    4. [Model Improvements](#model)
-5. [Future Works](#next)
+5. [Future Work](#next)
 
 
 ## Demo <a name="demo"></a>
