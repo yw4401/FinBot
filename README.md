@@ -33,7 +33,7 @@ The modern retail investor faces a dilemma—a scarcity of time to delve into ex
 #### 2.1.2 High Costs Linked to Traditional Financial Advisors
 Traditional financial advisory services often come with steep costs, sometimes ranging into hundreds of dollars per hour. This financial barrier restricts access to expert guidance and tailored advice, especially for smaller investors or those looking for cost-effective solutions.
 
-#### Steady Growth in Assets Under Management
+#### 2.1.3 Steady Growth in Assets Under Management
 The market reflects consistent growth in assets under management, showcasing a compound annual growth rate of around 9%. This expansion indicates an increasing interest and engagement in investing but also amplifies the need for accessible and scalable advisory solutions.
 
 #####                   Market Size Asset Under Management (Trillion $)
