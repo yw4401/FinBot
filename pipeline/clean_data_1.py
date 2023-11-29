@@ -74,6 +74,7 @@ if __name__ == "__main__":
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
     nlp = spacy.load(config.ARTICLE_COREF_SPACY_MOD)
 
+    # Fetching scraped articles within a specified timeframe
     src_df = get_scraped_articles(client)
     print(f"Total Articles: {src_df.shape[0]}")
     cleaned_df = execute_deduplication(src_df).copy()
