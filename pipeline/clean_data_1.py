@@ -53,6 +53,7 @@ def write_batch(project, batch):
     return True
 
 
+# Function to write articles after coreference resolution to BigQuery in batches
 def write_coref_articles(project, df, batch=10, jobs=8):
     params = [(o["id"], o["url"], o["source"], o["title"], o["published"],
                o["body"], o["coref"], o["summary"], o["summary_type"],
