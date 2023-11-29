@@ -351,7 +351,7 @@ We were able to achieve notable improvement in both ROUGE-2 and F1 score. Even w
 
 ![Tuned Hallucination QA](images/qa_tune_hal.png)
 
-## Future Work <a name="next"></a>
+## 4. Future Work <a name="next"></a>
 
 1. Model Optimization
    - RAG: Further improve RAG performance by distorting the data
