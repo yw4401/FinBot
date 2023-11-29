@@ -8,10 +8,11 @@ import torch
 
 from deduplication import execute_deduplication # Importing function for deduplication
 import config # Importing configuration settings
-from coref_resolve import add_coreference_resolution
-from allennlp.predictors.predictor import Predictor
-from joblib import delayed, Parallel
-from tqdm import tqdm
+from coref_resolve import add_coreference_resolution # Importing function for coreference resolution
+from allennlp.predictors.predictor import Predictor # Importing AllenNLP Predictor
+from joblib import delayed, Parallel # Importing joblib for parallel processing
+from tqdm import tqdm # Importing tqdm for progress tracking
+
 
 def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
