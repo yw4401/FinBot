@@ -338,4 +338,5 @@ We were able to achieve notable improvement in both ROUGE-2 and F1 score. Even w
 
 ## Future Work <a name="next"></a>
 
-TODO
+1. Model Optimization
+2. Product Deployment
