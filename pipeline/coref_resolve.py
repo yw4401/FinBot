@@ -7,11 +7,15 @@ from typing import List # Type hinting for lists
 import pandas as pd # Pandas for data manipulation
 import spacy # SpaCy for NLP tasks
 import torch # PyTorch for deep learning
+
 # AllenNLP Predictor for coreference resolution
 from allennlp.predictors.predictor import Predictor
+
 # SpaCy token objects
 from spacy.tokens import Doc 
 from spacy.tokens import Span
+
+# Progress tracking
 from tqdm import tqdm
 
 import config
