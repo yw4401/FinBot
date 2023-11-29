@@ -19,7 +19,7 @@
 https://github.com/yw4401/FinBot/assets/54665534/8e59fa43-9706-4af5-8bb3-4c6c8998292b
 
 
-## About FinBot <a name="background"></a>
+## 2. About FinBot <a name="background"></a>
 
 FinBot is an AI driven web application capable of analyzing financially related news articles and providing 
 insights to retail investors. The application can empower the users to make better investment decisions while saving 
