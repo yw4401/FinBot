@@ -42,6 +42,7 @@ def get_scraped_articles(client: bq.Client):
     return temp_result
 
 
+# Function to write a batch of cleaned articles to BigQuery
 def write_batch(project, batch):
     stmt = """INSERT INTO Articles.CleanedArticles VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
     client = bq.Client(project=project)
