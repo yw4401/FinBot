@@ -205,7 +205,7 @@ The algorithms for handling output is located in the [summarizer](summarizer) di
 - Finally, the chunks from each individual query are combined by applying RRF over each ranking of the retrieved chunks based on each query
 - The approach ensembles over various queries, and take into account most if not all of the enrichment's during the ingestion process.
 
-#### Final Generation
+#### 3.3.2 Final Generation
 - A custom fine-tuned summary model on the article summaries is used with the retrieved chunks to generate the key-points summaries
 - A model fine-tuned on reading comprehension based free-form QA is used to directly answer the user query
 - Raw text generation is enriched via publicly available metrics such as P/E ratio, Cashflow etc based on companies mentioned in the query and output
