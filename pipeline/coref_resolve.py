@@ -2,7 +2,7 @@
 import gc # Garbage collection for memory management
 import re # Regular expression operations
 from datetime import datetime # Date and time handling
-from typing import List
+from typing import List # Type hinting for lists
 
 import pandas as pd
 import spacy
