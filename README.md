@@ -3,7 +3,7 @@
 ## Table of contents
 1. [Demo](#demo)
 2. [About FinBot](#background)
-   1. [Why finbot?] (#why finbot)
+   1. [Why finbot?] (#why)
    2. [Project Mission](#mission)
    3. [Current Features](#features)
 4. [Project Implementation](#implementation)
@@ -25,7 +25,7 @@ FinBot is an AI driven web application capable of analyzing financially related 
 insights to retail investors. The application can empower the users to make better investment decisions while saving 
 time and money by leveraging the power of LLM retrieval augmented generation.
 
-### Why is FinBot necessary ? <a name="why finbot"></a>
+### Why is FinBot necessary ? <a name="why"></a>
 
 #### Time Constraints and the Demand for Timely Information
 The modern retail investor faces a dilemma—a scarcity of time to delve into extensive research while needing to stay updated with the dynamic opportunities in the market. The pace of change in investment landscapes demands continuous vigilance, making it challenging for individuals to keep pace with market shifts and opportunities.
