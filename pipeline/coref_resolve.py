@@ -1,5 +1,5 @@
 # Importing necessary libraries and modules
-import gc
+import gc # Garbage collection for memory management
 import re
 from datetime import datetime
 from typing import List
