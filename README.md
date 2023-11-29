@@ -147,7 +147,7 @@ the articles for output generation by chunking the article texts and indexing th
 - In this transformation, each coreference is replaced with its primary mention.
 - More emphasis on named entities, and preserves context on text chunking.
 
-#### Topic Modelling ([build_topics_2.py](pipeline/build_topics_2.py))
+#### 3.2.4 Topic Modelling ([build_topics_2.py](pipeline/build_topics_2.py))
 - The primary objective of topic modeling is to ensure the retrieval of a diverse set of content segments. 
 - Typically, in semantic search, there's a possibility that the top segments retrieved could be quite similar. However, by introducing topics, it compels the system to select segments that cover distinct facets or angles of the subject matter, promoting a more comprehensive and well-rounded result set.
 - BERTopics is used to utilize the power of embeddings for the clustering process.
