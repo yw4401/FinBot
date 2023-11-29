@@ -158,7 +158,7 @@ the articles for output generation by chunking the article texts and indexing th
 - The chunk boundaries are determined by first splitting the text into sentences using Spacy, then merging the sentences.
 - For each chunks, a list of named entities are extracted using Spacy to allow for matching by entity during output generation.
 
-#### Index Creation/Text Embedding ([build_vector_index_3.py](pipeline/build_vector_index_3.py))
+#### 3.2.6 Index Creation/Text Embedding ([build_vector_index_3.py](pipeline/build_vector_index_3.py))
 - Once all of the enrichment techniques are applied, a sentence transformer model is applied to each text chunk to create the associated embedding
 - Next, for each topic found, the summaries of the topics are converted into embeddings for relevant topic identification
 - An elastic search index containing the following information would be created for topic retrieval
