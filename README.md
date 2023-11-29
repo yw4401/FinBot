@@ -332,8 +332,6 @@ We pre-processed QA dataset to adjust data for RAG settings. For example, when p
 - Eliminated questions and answers with majority of context is number
 - Confirmed the text length of answers to ensure that it is concise
 
-![QA Model Fine-tuning](https://github.com/yw4401/FinBot/blob/b46d4cbf22fa11e0e4e8280be26a2ae2b928cc60/images/QA_Finetuning.png)
-
 ##### Model Finetuning
 
 We fine-tuned the Llama-Chat-13B model using the standard language modeling objective on the training split of our article dataset using half-precision LORA with the following hyper-parameters:
