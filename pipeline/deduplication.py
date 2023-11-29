@@ -16,6 +16,7 @@ import config
 seed(1631996)
 
 
+# Class defining a hash family for hashing elements
 class hashFamily:
     def __init__(self, i):
         self.resultSize = 8  # how many bytes we want back
