@@ -224,7 +224,7 @@ best one to fine-tune (if needed). Next, we fine-tuned the models gathered data 
 desired output format. Then, we evaluated the fine-tuned models on a separate test dataset to determine if the tuned models 
 meet our ends. Finally, the fine-tuned models are deployed on GCP to serve our clients.
 
-#### Text Embedding
+#### 3.4.1 Text Embedding
 The [ember-v1](https://huggingface.co/llmrails/ember-v1) model is used as a base for creating the embeddings for retrieval. The ember-v1 model is the best 
 non-instructed tuned embedding model for retrieval task on the HuggingFace MTEB Leaderboard. Thus, we have determined that 
 it would achieve a good balance of performance and simplicity to start our fine-tuning.
