@@ -6,7 +6,7 @@ from typing import List # Type hinting for lists
 
 import pandas as pd # Pandas for data manipulation
 import spacy # SpaCy for NLP tasks
-import torch
+import torch # PyTorch for deep learning
 from allennlp.predictors.predictor import Predictor
 from spacy.tokens import Doc
 from spacy.tokens import Span
