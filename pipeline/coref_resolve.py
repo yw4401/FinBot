@@ -58,6 +58,7 @@ def print_clusters(doc, clusters):
             print(']')
 
 
+# Function handling the core logic of replacing coreferences
 def core_logic_part(document: Doc, coref: List[int], resolved: List[str], mention_span: Span):
     final_token = document[coref[1]]
     if final_token.tag_ in ["PRP$", "POS"]:
@@ -69,6 +70,7 @@ def core_logic_part(document: Doc, coref: List[int], resolved: List[str], mentio
     return resolved
 
 
+# Function to replace coreferences in the original document
 def original_replace_corefs(document: Doc, clusters: List[List[List[int]]]) -> str:
     resolved = list(tok.text_with_ws for tok in document)
 
@@ -82,6 +84,7 @@ def original_replace_corefs(document: Doc, clusters: List[List[List[int]]]) -> s
     return "".join(resolved)
 
 
+# Function to get the cluster head and its indices
 def get_cluster_head(doc: Doc, cluster: List[List[int]], noun_indices: List[int]):
     head_idx = noun_indices[0]
     head_start, head_end = cluster[head_idx]
@@ -89,10 +92,12 @@ def get_cluster_head(doc: Doc, cluster: List[List[int]], noun_indices: List[int]
     return head_span, [head_start, head_end]
 
 
+# Function to check if a span contains other spans
 def is_containing_other_spans(span: List[int], all_spans: List[List[int]]):
     return any([s[0] >= span[0] and s[1] <= span[1] and s != span for s in all_spans])
 
 
+# Function for improved coreference resolution
 def improved_replace_corefs(document, clusters):
     resolved = list(tok.text_with_ws for tok in document)
     all_spans = [span for cluster in clusters for span in cluster]  # flattened list of all spans
@@ -110,6 +115,7 @@ def improved_replace_corefs(document, clusters):
     return "".join(resolved)
 
 
+# Function to create a window of sentences for context
 def window_sentences(sentences, idx, pre=5, sep="\n\n"):
     start_idx = max(0, idx - pre)
     context = " ".join(sentences[start_idx:idx])
@@ -118,6 +124,7 @@ def window_sentences(sentences, idx, pre=5, sep="\n\n"):
     return result
 
 
+# Function to perform coreference resolution for the entire text
 def coref_text_whole(article, predictor, nlp):
     article = article.strip()
     if len(article) == 0:
@@ -128,6 +135,7 @@ def coref_text_whole(article, predictor, nlp):
     return coref_article
 
 
+# Function to perform coreference resolution for text parts
 def coref_text_parts(sentences, predictor, nlp):
     sentences = list(sentences)
 
@@ -145,6 +153,7 @@ def coref_text_parts(sentences, predictor, nlp):
     return sentences
 
 
+# Function to handle coreference resolution for text
 def coref_text(article, predictor, nlp):
     try:
         return coref_text_whole(article, predictor, nlp)
@@ -154,6 +163,7 @@ def coref_text(article, predictor, nlp):
         return None
 
 
+# Function to add coreference resolution to DataFrame
 def add_coreference_resolution(df, predictor, nlp, src_col="body"):
     body = []
     with tqdm(total=len(df.index)) as progress:
