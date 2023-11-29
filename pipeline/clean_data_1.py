@@ -77,6 +77,8 @@ if __name__ == "__main__":
     # Fetching scraped articles within a specified timeframe
     src_df = get_scraped_articles(client)
     print(f"Total Articles: {src_df.shape[0]}")
+
+    # Executing deduplication process on scraped articles
     cleaned_df = execute_deduplication(src_df).copy()
     print(f"De-dup Articles: {cleaned_df.shape[0]}")
     cleaned_df = cleaned_df.loc[~cleaned_df.exists]
