@@ -153,7 +153,7 @@ the articles for output generation by chunking the article texts and indexing th
 - BERTopics is used to utilize the power of embeddings for the clustering process.
 - The titles from the top articles in a topic are used to generate themes of the topics used for index creation later.
 
-#### Text Chunking & NER ([build_vector_index_3.py](pipeline/build_vector_index_3.py))
+#### 3.2.5 Text Chunking & NER ([build_vector_index_3.py](pipeline/build_vector_index_3.py))
 - In order to make the most out of the context window for the LLMs, the article texts are split into chunks of up to 512 tokens
 - The chunk boundaries are determined by first splitting the text into sentences using Spacy, then merging the sentences.
 - For each chunks, a list of named entities are extracted using Spacy to allow for matching by entity during output generation.
