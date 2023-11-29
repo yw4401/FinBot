@@ -39,6 +39,7 @@ class shingler:
             self.k = 10
 
     # inner class utility
+    # Method to process the document text
     def process_doc(self, document):
         return re.sub("( )+|(\n)+", " ", document).lower()
 
