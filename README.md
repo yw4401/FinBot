@@ -264,7 +264,7 @@ the model performance with K = 2 and K = 2. The following metrics were computed 
 
 In general, we were able to improve the embedding model performance by a few percentage points for each metric.
 
-#### Targeted Summarization
+#### 3.4.2 Targeted Summarization
 
 ##### Data Augmentation
 
