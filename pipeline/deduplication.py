@@ -63,6 +63,7 @@ class shingler:
         return sorted({hash_function.get_hash_value(s) for s in shingles_set})
 
 
+# Class defining a minhash signer for generating signatures
 class minhashSigner:
     def __init__(self, sig_size):
         self.sig_size = sig_size
