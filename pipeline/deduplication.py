@@ -43,6 +43,7 @@ class shingler:
     def process_doc(self, document):
         return re.sub("( )+|(\n)+", " ", document).lower()
 
+    # Method to extract shingles from the document
     def get_shingles(self, document):
         shingles = set()
         document = self.process_doc(document)
