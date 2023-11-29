@@ -339,4 +339,7 @@ We were able to achieve notable improvement in both ROUGE-2 and F1 score. Even w
 ## Future Work <a name="next"></a>
 
 1. Model Optimization
+   - RAG: Further improve RAG performance by distorting the data
+   - Question and Answering: Try more QA reading comprehension model and compare with the current models e.g. Llama 7B
 2. Product Deployment
+   -
