@@ -14,7 +14,7 @@
 5. [Future Work](#next)
 
 
-## Demo <a name="demo"></a>
+## 1. Demo <a name="demo"></a>
 
 https://github.com/yw4401/FinBot/assets/54665534/8e59fa43-9706-4af5-8bb3-4c6c8998292b
 
