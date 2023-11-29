@@ -6,13 +6,12 @@ import google.cloud.bigquery.dbapi as bqapi
 import spacy
 import torch
 
-from deduplication import execute_deduplication
-import config
+from deduplication import execute_deduplication # Importing function for deduplication
+import config # Importing configuration settings
 from coref_resolve import add_coreference_resolution
 from allennlp.predictors.predictor import Predictor
 from joblib import delayed, Parallel
 from tqdm import tqdm
-
 
 def get_scraped_articles(client: bq.Client):
     query = "SELECT SA.id, SA.url, SA.source, SA.title, SA.published, SA.body, SA.summary, SA.summary_type, SA.category " \
