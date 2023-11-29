@@ -104,7 +104,7 @@ would be able to learn about different companies at a glance.
 
 <img src="images/stock_screenshot.png" alt="drawing" width="768"/>
 
-## Project Implementation <a name="implementation"></a>
+## 3. Project Implementation <a name="implementation"></a>
 
 In order to accomplish the goal of the project, the features can be seen as retrieval augmented generation problems. 
 While LLMs may encode prior knowledge from pre-training, it is difficult to control and to ensure the correctness of 
