@@ -29,6 +29,7 @@ class hashFamily:
             16)
 
 
+# Class defining a shingler for text shingling operations
 class shingler:
     def __init__(self, k):
 
