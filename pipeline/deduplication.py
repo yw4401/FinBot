@@ -56,7 +56,8 @@ class shingler:
     def get_k(self):
         return self.k
 
-    # return sorted hash
+    
+    # Method to get the sorted hashed shingles
     def get_hashed_shingles(self, shingles_set):
         hash_function = hashFamily(0)
         return sorted({hash_function.get_hash_value(s) for s in shingles_set})
