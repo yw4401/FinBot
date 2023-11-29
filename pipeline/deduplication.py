@@ -9,6 +9,8 @@ import networkx as nx
 
 # Random number generation
 from random import randint, seed
+
+# Configuration settings
 import config
 
 seed(1631996)
