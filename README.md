@@ -97,7 +97,7 @@ to their inquiry.
 
 <img src="images/keypoints_screenshot.png" alt="drawing" width="768"/>
 
-#### Intelligent Stock Screener
+#### 2.3.3 Intelligent Stock Screener
 
 FinBot automatically extracts relevant companies for each query, and present selected KPIs to the users. The users 
 would be able to learn about different companies at a glance.
@@ -113,7 +113,7 @@ for the purpose of assisting the users with market research and advice, the appr
 around LLMs, feed the LLMs data required to perform tasks pretaining to the features, and make use of the domain knowledge 
 and reasoning ability of the LLMs to create the outputs for the users.
 
-### High Level Process Flow <a name="architecture"></a>
+### 3.1 High Level Process Flow <a name="architecture"></a>
 
 <img src="images/arch_high.png" alt="drawing" width="768"/>
 
