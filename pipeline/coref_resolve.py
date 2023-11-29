@@ -5,7 +5,7 @@ from datetime import datetime # Date and time handling
 from typing import List # Type hinting for lists
 
 import pandas as pd # Pandas for data manipulation
-import spacy
+import spacy # SpaCy for NLP tasks
 import torch
 from allennlp.predictors.predictor import Predictor
 from spacy.tokens import Doc
