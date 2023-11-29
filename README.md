@@ -3,7 +3,7 @@
 ## Table of contents
 1. [Demo](#demo)
 2. [About FinBot](#background)
-   1. [Why finbot?] (#why)
+   1. [Why finbot?](#why)
    2. [Project Mission](#mission)
    3. [Current Features](#features)
 4. [Project Implementation](#implementation)
