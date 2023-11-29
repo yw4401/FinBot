@@ -137,7 +137,7 @@ the articles for output generation by chunking the article texts and indexing th
 - News articles spanning from March 2008 to September 2023 have been scraped and collected for the project.
 - The scrapers dump the scraped articles into BigQuery.
 
-#### Deduplication of the news articles ([clean_data_1.py](pipeline/clean_data_1.py))
+#### 3.2.2 Deduplication of the news articles ([clean_data_1.py](pipeline/clean_data_1.py))
 - The dataset includes near duplicate articles, which may be attributed to either the scraper's behavior or the occurrence of similar news articles from different sources.
 - Eliminating these duplicate news articles is crucial to improve efficiency, prevent potential biases caused by redundant information, and ensure a more accurate representation of the data.
 - In this context, we've employed the MinHash LSH technique to effectively eliminate duplicate news articles from the dataset.
