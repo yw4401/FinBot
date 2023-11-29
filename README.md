@@ -178,7 +178,7 @@ the articles for output generation by chunking the article texts and indexing th
 
 Once the indices are built, the solution is ready to generate informative output for the users.
 
-### Output Generation <a name="generation"></a>
+### 3.3 Output Generation <a name="generation"></a>
 
 The final output to the user consists of three main segments:
 - Direct answer to user query
