@@ -35,6 +35,7 @@ Traditional financial advisory services often come with steep costs, sometimes r
 #### Steady Growth in Assets Under Management
 The market reflects consistent growth in assets under management, showcasing a compound annual growth rate of around 9%. This expansion indicates an increasing interest and engagement in investing but also amplifies the need for accessible and scalable advisory solutions.
 
+#####                   Market Size Asset Under Management (Trillion $)
 <img src="images/asset_under_management.jpeg" alt="drawing" width="768"/>
 
 ### Project Mission <a name="mission"></a>
