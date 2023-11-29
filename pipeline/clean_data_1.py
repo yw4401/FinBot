@@ -88,4 +88,6 @@ if __name__ == "__main__":
 
     # Adding coreference resolution to the final set of articles
     coref_df = add_coreference_resolution(cleaned_df, predictor=predictor, nlp=nlp)
+
+    # Writing the articles with coreference resolution to BigQuery in batches
     write_coref_articles(config.GCP_PROJECT, coref_df, batch=100)
