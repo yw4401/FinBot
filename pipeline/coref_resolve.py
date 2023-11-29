@@ -9,7 +9,7 @@ import spacy # SpaCy for NLP tasks
 import torch # PyTorch for deep learning
 # AllenNLP Predictor for coreference resolution
 from allennlp.predictors.predictor import Predictor
-from spacy.tokens import Doc
+from spacy.tokens import Doc # SpaCy token objects
 from spacy.tokens import Span
 from tqdm import tqdm
 
