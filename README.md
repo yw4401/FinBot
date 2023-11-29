@@ -27,10 +27,10 @@ time and money by leveraging the power of LLM retrieval augmented generation.
 
 ### 2.1 Why is FinBot necessary ? <a name="why"></a>
 
-#### 2.1.1Time Constraints and the Demand for Timely Information
+#### 2.1.1 Time Constraints and the Demand for Timely Information
 The modern retail investor faces a dilemma—a scarcity of time to delve into extensive research while needing to stay updated with the dynamic opportunities in the market. The pace of change in investment landscapes demands continuous vigilance, making it challenging for individuals to keep pace with market shifts and opportunities.
 
-#### High Costs Linked to Traditional Financial Advisors
+#### 2.1.2 High Costs Linked to Traditional Financial Advisors
 Traditional financial advisory services often come with steep costs, sometimes ranging into hundreds of dollars per hour. This financial barrier restricts access to expert guidance and tailored advice, especially for smaller investors or those looking for cost-effective solutions.
 
 #### Steady Growth in Assets Under Management
