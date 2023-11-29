@@ -56,7 +56,7 @@ happens to fall into their expertise, such information may be an unknown unknown
 
 <img src="images/unknown_unknown.png" alt="drawing" width="768"/>
 
-#### Staying up-to-date
+#### 2.2.2 Staying up-to-date
 
 Investment opportunities are time-dependent and require up-to-date information. But, staying up-to-date while life 
 happens require constant effort. Suppose that an investor is interested in pharmaceutical sector, but making informed 
