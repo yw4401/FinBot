@@ -1,5 +1,7 @@
 # For data manipulation
 import pandas as pd
+
+# Regular expressions, hashing, mathematical operations, time
 import re, hashlib, math, time
 import networkx as nx
 from random import randint, seed
