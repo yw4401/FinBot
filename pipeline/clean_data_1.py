@@ -81,6 +81,8 @@ if __name__ == "__main__":
     # Executing deduplication process on scraped articles
     cleaned_df = execute_deduplication(src_df).copy()
     print(f"De-dup Articles: {cleaned_df.shape[0]}")
+
+    # Filtering out existing articles from the cleaned set
     cleaned_df = cleaned_df.loc[~cleaned_df.exists]
     print(f"Final Articles: {cleaned_df.shape[0]}")
     coref_df = add_coreference_resolution(cleaned_df, predictor=predictor, nlp=nlp)
