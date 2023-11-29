@@ -65,7 +65,7 @@ process of treatment procedures. But, not everyone has the
 time or energy to scan through news and documents on medical procedures after a long day at work and taking care 
 of family matters.
 
-#### Democratizing the Market
+#### 2.2.3 Democratizing the Market
 
 Generic ETFs and mutual funds are common solutions employed by retail investors to get a decent return without 
 having expert knowledge. Thus, the asset managers or index tracking algorithms are making decisions on behalf of a large 
