@@ -81,7 +81,7 @@ our users the power to quickly digest facts and insights from the vast collectio
 articles
 
 
-### Current Features <a name="features"></a>
+### 2.3 Current Features <a name="features"></a>
 
 #### Question Answering
 
