@@ -320,8 +320,8 @@ def get_data_sets_df(sample_df, test_instances=1000, context_col="body", resp_co
                      impossible_resp=config.SUMMARY_IMPOSSIBLE_RESP):
     sample_df = sample_df.sample(frac=1, random_state=93).reset_index(drop=True)
     clean_regex = re.compile(r"\*[\s\n]*(?=\*)")
-    sample_df[resp_col] = sample_df.summary.apply(lambda s: clean_regex.sub(" ", s).strip())
-    sample_df[resp_col] = sample_df.summary.str.strip()
+    sample_df[resp_col] = sample_df[resp_col].apply(lambda s: clean_regex.sub(" ", s).strip())
+    sample_df[resp_col] = sample_df[resp_col].str.strip()
 
     body = []
     published = []

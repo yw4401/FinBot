@@ -6,6 +6,9 @@ if __name__ == "__main__":
     articles = pd.read_parquet(f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_QA_ARTICLES_COREF}")
     print(df.columns)
     print(articles.columns)
+    print(articles.answerable.head())
+    print(articles.answer.head())
+    articles = articles[["context", "answerable", "unanswerable", "answer", "published"]]
     article_train, article_test = get_data_sets_df(articles, test_instances=200, context_col="context",
                                                    resp_col="answer", answerable_col="answerable",
                                                    unanswerable_col="unanswerable",
