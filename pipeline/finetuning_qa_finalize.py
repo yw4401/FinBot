@@ -2,7 +2,8 @@ from build_vector_index_3 import create_splitter
 from finetuning import *
 
 if __name__ == "__main__":
-    df = pd.read_parquet(f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_QA_COREF}")
+    df = pd.read_parquet(f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_QA_COREF}").sample(10000,
+                                                                                                      random_state=93)
     articles = pd.read_parquet(f"gs://{config.FINE_TUNE_TARGET_BUCKET}/{config.FINE_TUNE_QA_ARTICLES_COREF}")
     print(df.columns)
     print(articles.columns)
