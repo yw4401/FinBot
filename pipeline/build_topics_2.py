@@ -95,8 +95,6 @@ def summarize_topics(df: pd.DataFrame, jobs=7):
                 parallel(delayed(summarization_wrapper)(summarizer, work, df) for work in topics)):
             topic_sum.loc[topic_sum.topic == w, "summary"] = summary
             progress.update(1)
-            if i % 10 == 0:
-                print(summary)
 
     return topic_sum
 
@@ -114,10 +112,11 @@ def upload_topic(model: BERTopic):
 def write_topics(client: bq.Client, model, sum_df):
     path = upload_topic(model)
     current_time = datetime.datetime.now()
-    model_stmt = """INSERT INTO Articles.TopicModel SELECT GENERATE_UUID(), ?, ?, False FROM Articles.TopicModel;"""
+    model_stmt = """INSERT INTO Articles.TopicModel SELECT GENERATE_UUID(), ?, ?, False;"""
     ins_stmt = """INSERT INTO Articles.TopicSummary SELECT ?, id, ? FROM Articles.TopicModel WHERE fit_date = ?"""
     client = bq.Client(project=client.project)
 
+    print("Writing model at: " + str(path))
     with BigquerySession(client) as session:
         session.begin_transaction()
         job = client.query(model_stmt, bq.QueryJobConfig(
