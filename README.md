@@ -44,9 +44,7 @@ The market reflects consistent growth in assets under management, showcasing a c
 This expansion indicates an increasing interest and engagement in investing but also amplifies the need for accessible
 and scalable advisory solutions.
 
-##### Market Size Asset Under Management (Trillion $)
-
-<img src="images/asset_under_management.jpeg" alt="drawing" width="768"/>
+<img src="images/Asset_Under_Management.jpeg" alt="drawing" width="768"/>
 
 ### 2.2 Project Mission <a name="mission"></a>
 
