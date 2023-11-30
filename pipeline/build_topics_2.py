@@ -202,7 +202,7 @@ def categorize_articles(client):
     return id, articles
 
 
-def write_article_topics(articles, model_id, batch_size=1000, jobs=8):
+def write_article_topics(articles, model_id, batch_size=100, jobs=8):
     params = [(row["id"], model_id, row["topic"], row["topic_prob"]) for _, row in articles.iterrows()]
     batches = []
     for i in range(0, len(params), batch_size):
