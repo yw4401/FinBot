@@ -428,7 +428,7 @@ score for classifying impossible questions increased to 0.9 from 0.22.
 ## 4. Future Work <a name="next"></a>
 
 1. Model Optimization
-    - RAG: Further improve RAG performance by distorting the data
+    - RAG: Further improve RAG performance by distorting the data, allowing the model to return outputs on more various inquiries from users
     - Question and Answering: Try more QA reading comprehension model and compare with the current models e.g. Llama 70B
 2. Product Deployment
     - Follow-up Questions: Provide insights and recommendations based on user query and settings
