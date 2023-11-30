@@ -13,5 +13,5 @@ COPY ./es_id ./es_key ./key $APP_HOME/
 ADD ./summarizer $APP_HOME/summarizer
 COPY ./dashboardv4.py $APP_HOME/
 
-ENTRYPOINT streamlit run --server.port 80 dashboardv4.py
+ENTRYPOINT streamlit run --server.port 80 UI.py
 
