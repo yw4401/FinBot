@@ -183,12 +183,32 @@ def get_topic_model(client):
 
 
 def batch_insert_topic(project, batch):
-    query = """INSERT INTO Articles.ArticleTopic VALUES(%s, %s, %s, %s)"""
-    with closing(bq.Client(project=project)) as client:
-        with closing(bqapi.Connection(client=client)) as connection:
-            with closing(connection.cursor()) as cursor:
-                cursor.executemany(query, batch)
-            connection.commit()
+    query = """INSERT INTO Articles.ArticleTopic VALUES(?, ?, ?, ?)"""
+    while True:
+        try:
+            with closing(bq.Client(project=project)) as client:
+                with BigquerySession(client) as session:
+                    session.begin_transaction()
+                    for id, model_id, topic, topic_prob in batch:
+                        job = client.query(query, bq.QueryJobConfig(
+                            create_session=False,
+                            query_parameters=[
+                                bq.ScalarQueryParameter(None, "STRING", id),
+                                bq.ScalarQueryParameter(None, "STRING", model_id),
+                                bq.ScalarQueryParameter(None, "INTEGER", topic),
+                                bq.ScalarQueryParameter(None, "FLOAT", topic_prob)
+                            ],
+                            connection_properties=[
+                                bq.query.ConnectionProperty(
+                                    key="session_id", value=session.session_id
+                                )
+                            ],
+                        ), location=session.location)
+                    job.result()
+                    session.commit()
+                    return
+        except Exception as e:
+            print(e)
 
 
 def categorize_articles(client):
@@ -202,7 +222,7 @@ def categorize_articles(client):
     return id, articles
 
 
-def write_article_topics(articles, model_id, batch_size=100, jobs=8):
+def write_article_topics(articles, model_id, batch_size=16, jobs=8):
     params = [(row["id"], model_id, row["topic"], row["topic_prob"]) for _, row in articles.iterrows()]
     batches = []
     for i in range(0, len(params), batch_size):
@@ -213,8 +233,16 @@ def write_article_topics(articles, model_id, batch_size=100, jobs=8):
             progress.update(1)
 
 
+def write_article_topics_manual(articles, model_id):
+    result = articles[["id", "topic", "topic_prob"]].copy()
+    result["model"] = model_id
+    result.to_parquet("article_topics.parquet", index=False)
+    return result
+
+
 if __name__ == "__main__":
     with closing(bq.Client(project=config.GCP_PROJECT)) as client:
         mid, articles = categorize_articles(client)
         gc.collect()
-        write_article_topics(articles, mid)
+        # write_article_topics(articles, mid)
+        write_article_topics_manual(articles, mid)
