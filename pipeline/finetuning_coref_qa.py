@@ -43,10 +43,12 @@ if __name__ == "__main__":
     TAT_QA_URL = "gs://finetuningllama/tat_qa_rewritten.parquet"
     tat_qa_df = pd.read_parquet(TAT_QA_URL)[["question", "related_text", "answer"]].rename(
         columns={"related_text": "context"})
+    finqa_df = load_finqa()
     web_glm_df = load_webglm()
-    finace_related = tat_qa_df.shape[0]
-    generic = 21000 - finace_related
-    final_df = pd.concat([tat_qa_df, web_glm_df.sample(generic)], ignore_index=True)
+    finance_numeric = min(math.floor(tat_qa_df.shape[0] * 0.25), finqa_df.shape[0])
+    finace_related = finance_numeric + tat_qa_df.shape[0]
+    generic = min(finace_related, web_glm_df.shape[0])
+    final_df = pd.concat([tat_qa_df, finqa_df.sample(finance_numeric), web_glm_df.sample(generic)], ignore_index=True)
     print("Final Size: " + str(final_df.shape[0]))
 
     predictor = Predictor.from_path(config.ARTICLE_COREF_MOD_URL, cuda_device=torch.cuda.current_device())
