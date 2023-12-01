@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import spacy
 import torch
-from elasticsearch import Elasticsearch, NotFoundError
+from elasticsearch import Elasticsearch, NotFoundError, ApiError
 from langchain.text_splitter import SpacyTextSplitter
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
@@ -230,7 +230,11 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df, topic_df):
 
     with tqdm(total=len(total_chunks)) as progress:
         for id_chunk, doc in total_chunks:
-            client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
+            try:
+                client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
+            except ApiError as e:
+                print(e)
+                pass
             progress.update(1)
 
 
