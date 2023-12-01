@@ -24,8 +24,9 @@ from summarize_topics import summarization_wrapper, create_topic_summarizer
 
 def get_topicless_articles(client, model):
     query = "SELECT CA.id, CA.title, CA.coref, CA.published " \
-            "FROM Articles.CleanedArticles AS CA LEFT JOIN Articles.ArticleTopic TA ON CA.id = TA.article_id " \
-            f"WHERE (TA.article_id IS NULL OR TA.model IS NULL OR TA.model != %s) AND " \
+            "FROM Articles.CleanedArticles AS CA " \
+            "LEFT JOIN Articles.ArticleTopic TA ON CA.id = TA.article_id AND TA.model = %s " \
+            "WHERE TA.article_id IS NULL AND " \
             f"CA.published >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {config.TOPIC_FIT_RANGE_DAY} DAY)"
     results = []
 
