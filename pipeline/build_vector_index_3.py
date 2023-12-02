@@ -232,7 +232,7 @@ def create_es_doc_idx(client: Elasticsearch, encoder, article_df, topic_df):
         for id_chunk, doc in total_chunks:
             try:
                 client.update(index=config.ES_ARTICLE_INDEX, id=id_chunk, doc=doc, doc_as_upsert=True)
-            except ApiError as e:
+            except Exception as e:
                 print(e)
                 pass
             progress.update(1)
