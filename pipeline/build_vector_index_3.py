@@ -280,6 +280,7 @@ def get_articles_by_topics(client: bq.Client, model):
                 result.append(list(r))
     result_df = pd.DataFrame(result, columns=["id", "url", "published", "source", "title", "body", "topic"])
     result_df["model"] = model
+    result_df = result_df.drop_duplicates(subset=["body"])
     return result_df
 
 
