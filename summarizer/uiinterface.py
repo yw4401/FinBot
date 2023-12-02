@@ -525,7 +525,7 @@ def finbot_response(text, period, history):
     :param period: string representing how far back to go
     """
 
-    now = datetime.datetime(year=2023, month=11, day=10)
+    now = datetime.datetime(year=2023, month=11, day=27)
     delta = period_map[period]
     topic_model = get_model_num()
     actual_history = history[:-1]
